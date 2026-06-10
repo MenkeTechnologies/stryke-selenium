@@ -1,0 +1,47 @@
+# bin/selenium-test.stk — smoke test for the stryke-selenium install path.
+#
+# Installed as `~/.stryke/bin/selenium-test` by `s pkg install -g
+# github.com/MenkeTechnologies/stryke-selenium`. Run from any directory
+# to verify the whole stack works end-to-end:
+#
+#   1. shell launches ~/.stryke/bin/selenium-test (sh shim)
+#   2. shim execs `stryke <store>/bin/selenium-test.stk`
+#   3. stryke parses, `use Selenium` resolves via ~/.stryke/installed.toml
+#   4. stryke's FFI loader dlopens libstryke_selenium.{dylib,so}
+#   5. Selenium::* calls dispatch into the cdylib in-process
+#
+# Output proves each step succeeded. Errors at any step surface as
+# stryke runtime errors with line numbers pointing here.
+#
+# Permission-free: exercises only the static dispatch surface
+# (supported_browsers, locator_strategies, sessions) — no WebDriver
+# server contacted, no browser launched.
+
+use Selenium
+
+p "stryke-selenium smoke test"
+p ""
+
+# 1. permission-free: SUPPORTED_BROWSERS is a static slice inside the
+#    cdylib, no thirtyfour / tokio interaction.
+val @browsers = Selenium::supported_browsers()
+p "supported_browsers:    " . scalar(@browsers) . " names"
+p "  @browsers"
+
+# 2. permission-free: LOCATOR_STRATEGIES is a static slice.
+val @strats = Selenium::locator_strategies()
+p ""
+p "locator_strategies:    " . scalar(@strats) . " names"
+p "  @strats"
+
+# 3. session registry is empty until Selenium::open runs.
+val @sessions = Selenium::sessions()
+p ""
+p "sessions:              " . scalar(@sessions) . " open  (expected 0)"
+
+p ""
+p "OK — FFI roundtrip works (no WebDriver server contacted)"
+p ""
+p "next step: launch a WebDriver server and try:"
+p "  chromedriver --port=9515 &"
+p "  s -e 'use Selenium; Selenium::open(); Selenium::goto(\"https://example.com\"); p Selenium::title(); Selenium::quit()'"
