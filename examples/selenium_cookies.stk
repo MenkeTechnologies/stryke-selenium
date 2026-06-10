@@ -1,0 +1,50 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — cookie inspection / add / delete. Uses example.com as
+# the origin (cookies are scoped to origin, so we set + read + clear
+# without polluting any real site's state).
+#
+# Run:  s examples/selenium_cookies.stk
+#
+# Requires: chromedriver running.
+
+p "── cookies selenium demo ────────────────────────────"
+
+Selenium::open(browser => "chrome", headless => 1)
+Selenium::goto("https://example.com")
+
+p "before:"
+val $before = Selenium::cookies()
+p "  " . len(@$before) . " cookies"
+
+p ""
+p "adding a cookie: stryke=hello (path=/)"
+Selenium::add_cookie(
+    name      => "stryke",
+    value     => "hello",
+    path      => "/",
+    secure    => 1,
+    same_site => "Lax",
+)
+
+val $after = Selenium::cookies()
+p "after:"
+p "  " . len(@$after) . " cookies"
+
+# Find ours by name.
+for val $c (@$after) {
+    if ($c->{name} eq "stryke") {
+        p "  found: name=$c->{name} value=$c->{value} secure=$c->{secure}"
+    }
+}
+
+p ""
+p "deleting stryke cookie..."
+Selenium::delete_cookie("stryke")
+val $final = Selenium::cookies()
+p "final: " . len(@$final) . " cookies"
+
+Selenium::quit()
+p "done."

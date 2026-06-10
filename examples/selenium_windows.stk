@@ -1,0 +1,44 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — multi-tab control. Opens a second tab via JS, lists
+# both window handles, switches between them, then closes the second
+# and switches back.
+#
+# Run:  s examples/selenium_windows.stk
+#
+# Requires: chromedriver running.
+
+p "── windows selenium demo ────────────────────────────"
+
+Selenium::open(browser => "chrome", headless => 1)
+Selenium::goto("https://example.com")
+
+val $first = Selenium::current_window()
+p "first window:  $first"
+p "  title:       " . Selenium::title()
+
+# Open a second tab via window.open (chromedriver respects the
+# data: URL just fine in headless mode).
+Selenium::execute_script("window.open('data:text/html,<h1>second tab</h1>')")
+val @handles = Selenium::window_handles()
+p ""
+p "handles after open: " . scalar(@handles)
+
+# Switch to the new tab (= whichever handle isn't $first).
+val @others = grep { $_ ne $first } @handles
+val $second = $others[0]
+Selenium::switch_window($second)
+p "switched to:   " . Selenium::current_window()
+p "  title:       " . Selenium::title()
+
+# Close the second tab via JS and switch back.
+Selenium::execute_script("window.close()")
+Selenium::switch_window($first)
+p ""
+p "back to first: " . Selenium::current_window()
+p "  title:       " . Selenium::title()
+
+Selenium::quit()
+p "done."

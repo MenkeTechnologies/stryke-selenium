@@ -1,0 +1,38 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — full-page + per-element screenshots. Saves both PNGs
+# to /tmp and prints the paths so you can `open` them.
+#
+# Run:  s examples/selenium_screenshot.stk
+#
+# Requires: chromedriver running.
+
+val $FULL_PATH = "/tmp/stryke_selenium_full.png"
+val $ELEM_PATH = "/tmp/stryke_selenium_h1.png"
+
+p "── screenshot selenium demo ─────────────────────────"
+
+Selenium::open(browser => "chrome", headless => 1)
+Selenium::goto("https://example.com")
+
+p "capturing full page → $FULL_PATH"
+val $p1 = Selenium::screenshot($FULL_PATH)
+p "saved: $p1"
+
+p ""
+p "capturing <h1> → $ELEM_PATH"
+val $h1 = Selenium::find("h1")
+val $p2 = Selenium::element_screenshot($h1, $ELEM_PATH)
+p "saved: $p2"
+
+# In-memory capture — just confirm the shape, don't dump the bytes.
+p ""
+val $bytes = Selenium::screenshot()
+p "in-memory PNG: " . len(@$bytes) . " bytes  (first 8 = PNG magic)"
+
+Selenium::quit()
+p "done — open the PNGs:"
+p "  open $FULL_PATH"
+p "  open $ELEM_PATH"

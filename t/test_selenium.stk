@@ -1,0 +1,57 @@
+## t/test_selenium.stk — assertion tests for the stryke `Selenium` package.
+##
+## Uses stryke's native test framework (`assert_*` + `test_run`).
+## Exercises the FFI surface without needing a WebDriver server:
+## `supported_browsers`, `locator_strategies`, and `sessions` (empty when
+## no browsers are open) are all pure dispatch into static state inside
+## the cdylib — no chromedriver / geckodriver / safaridriver required, so
+## they run unattended in CI.
+##
+## Live browser ops (open / goto / find / click / screenshot) need a
+## running WebDriver server + a real browser, so they're not asserted
+## here — they're exercised by `examples/selenium_*.stk` against a
+## locally-launched chromedriver.
+
+use Selenium
+
+# ── Selenium::supported_browsers FFI roundtrip ──────────────────────
+# Proves the FFI call path end-to-end: stryke → selenium__supported_browsers
+# → JSON → stryke. No WebDriver server contacted.
+val @browsers = Selenium::supported_browsers()
+assert_ge scalar(@browsers), 4, "supported_browsers returns >= 4 names"
+
+val %seen = map { $_ => 1 } @browsers
+assert_ok $seen{chrome},  "browsers contain 'chrome'"
+assert_ok $seen{firefox}, "browsers contain 'firefox'"
+assert_ok $seen{safari},  "browsers contain 'safari'"
+assert_ok $seen{edge},    "browsers contain 'edge'"
+
+# ── Selenium::locator_strategies FFI roundtrip ──────────────────────
+val @strats = Selenium::locator_strategies()
+assert_ge scalar(@strats), 8, "locator_strategies returns >= 8 names"
+
+val %sseen = map { $_ => 1 } @strats
+assert_ok $sseen{css},               "strategies contain 'css'"
+assert_ok $sseen{id},                "strategies contain 'id'"
+assert_ok $sseen{xpath},             "strategies contain 'xpath'"
+assert_ok $sseen{name},              "strategies contain 'name'"
+assert_ok $sseen{tag},               "strategies contain 'tag'"
+assert_ok $sseen{class},             "strategies contain 'class'"
+assert_ok $sseen{link_text},         "strategies contain 'link_text'"
+assert_ok $sseen{partial_link_text}, "strategies contain 'partial_link_text'"
+
+# ── Selenium::sessions is empty when no browser open ────────────────
+# The cdylib was just dlopened by this test; no `Selenium::open` has
+# run, so the registry must be empty.
+val @sessions = Selenium::sessions()
+assert_eq scalar(@sessions), 0, "no sessions open before Selenium::open"
+
+# active() returns undef when no session is active.
+val $current = Selenium::active()
+assert_ok !defined($current), "active() is undef when no session is open"
+
+# ── quit_all is a no-op safe call when no sessions are open ─────────
+val $closed = Selenium::quit_all()
+assert_eq $closed, 0, "quit_all closes 0 sessions when none are open"
+
+test_run

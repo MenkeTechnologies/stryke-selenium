@@ -1,0 +1,30 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — headless Chrome. Same script as selenium_basic.stk but
+# without a visible browser window. Useful for CI / cron / background
+# scraping where popping up a Chrome window is undesirable.
+#
+# Run:  s examples/selenium_headless.stk
+#
+# Requires: chromedriver running.
+#   chromedriver --port=9515 &
+#
+# `headless => 1` adds `--headless=new` + `--disable-gpu` to the chrome
+# capabilities. Safari has no headless mode — pass chrome / firefox /
+# edge for that flag to take effect.
+
+p "── headless selenium demo ───────────────────────────"
+
+val $sid = Selenium::open(browser => "chrome", headless => 1)
+p "opened headless session #$sid"
+
+Selenium::goto("https://example.com")
+p "title:   " . Selenium::title()
+
+val ($w, $h) = Selenium::rect(Selenium::find("h1"))
+p "h1 size: ${w}x${h} (rendered headless)"
+
+Selenium::quit()
+p "done."

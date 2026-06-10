@@ -1,0 +1,488 @@
+## lib/Selenium.stk — Selenium WebDriver automation for stryke (`use Selenium`).
+##
+## Thin wrapper around the `stryke-selenium` cdylib's `selenium__*` exports.
+## The cdylib is dlopened in-process on first `use Selenium` (see stryke's
+## `pkg/commands.rs::try_load_ffi_for`) and registers each export as a
+## stryke-callable function via `rust_ffi::load_cdylib`. Every wrapper here
+## builds a JSON args dict, calls the FFI symbol, and parses the JSON
+## return.
+##
+## A process-global tokio runtime inside the cdylib bridges thirtyfour's
+## async API to the sync FFI; `WebDriver` sessions and `WebElement` handles
+## persist across calls. A stryke script opens a browser once, drives it
+## across many `Selenium::*` calls, and quits at the end — no
+## per-call session re-handshake.
+##
+## Requires a running WebDriver server. Common choices:
+##   chromedriver --port=9515            # default; matches Selenium::open()
+##   geckodriver  --port=4444            # firefox; pass url => "http://localhost:4444"
+##   safaridriver --port=4444            # macOS only
+##   java -jar selenium-server-4.x.jar standalone --port 4444
+##
+## See README.md [0x04] for install / launch one-liners per browser.
+
+package Selenium
+
+# ── error dispatch ────────────────────────────────────────────────────
+
+## Decode the JSON returned by a `selenium__*` FFI call and die with a
+## descriptive message when the cdylib reported an error.
+fn Selenium::_decode ($name, $json) {
+    val $o = from_json $json
+    if (ref $o eq "HASH" && exists $o->{error}) {
+        die "Selenium::$name: $o->{error}"
+    }
+    $o
+}
+
+## Inject a `session` key into an args hash when it's defined. Used by
+## every navigation/query call so a single `Selenium::open` return value
+## can be threaded through multi-browser scripts.
+fn Selenium::_with_session (%args, $sid) {
+    $args{session} = $sid if defined $sid
+    \%args
+}
+
+# ── session lifecycle ────────────────────────────────────────────────
+
+## Open a new browser session and return its integer session id.
+##   %opts: browser (default "chrome"), url (override WebDriver URL),
+##          headless (1 for chrome/firefox/edge).
+## The first successful open is promoted to the active session, so
+## scripts that drive one browser can omit `session => $sid` on every
+## call.
+fn Selenium::open (%opts) {
+    var %args = (
+        browser  => exists $opts{browser}  ? $opts{browser}  : "chrome",
+        headless => exists $opts{headless} ? ($opts{headless} ? \1 : \0) : \0,
+    )
+    $args{url} = $opts{url} if defined $opts{url}
+    val $o = Selenium::_decode("open", selenium__open(to_json(\%args)))
+    $o->{session}
+}
+
+## Close the named session (or the active session if $sid is omitted).
+fn Selenium::quit ($sid = undef) {
+    var %args
+    $args{session} = $sid if defined $sid
+    Selenium::_decode("quit", selenium__quit(to_json(\%args)))
+    1
+}
+
+## Close every open session. Returns the count of sessions whose
+## `WebDriver::quit` succeeded — lossy by design so a single bad session
+## doesn't strand the rest.
+fn Selenium::quit_all {
+    val $o = Selenium::_decode("quit_all", selenium__quit_all("{}"))
+    $o->{closed}
+}
+
+## List of currently open session ids → @ids.
+fn Selenium::sessions {
+    val $o = Selenium::_decode("sessions", selenium__sessions("{}"))
+    @{ $o->{sessions} }
+}
+
+## Active session id, or undef when none is open.
+fn Selenium::active {
+    val $o = Selenium::_decode("active", selenium__active("{}"))
+    $o->{active}
+}
+
+## Set the active session id (must be one that `Selenium::sessions`
+## returns).
+fn Selenium::set_active ($sid) {
+    Selenium::_decode("set_active",
+        selenium__set_active(to_json({ session => $sid })))
+    1
+}
+
+## Every browser the cdylib knows how to launch → @list.
+fn Selenium::supported_browsers {
+    val $arr = Selenium::_decode("supported_browsers", selenium__supported_browsers("{}"))
+    @$arr
+}
+
+## Every locator-strategy name accepted by `Selenium::find` → @list.
+fn Selenium::locator_strategies {
+    val $arr = Selenium::_decode("locator_strategies", selenium__locator_strategies("{}"))
+    @$arr
+}
+
+# ── navigation ───────────────────────────────────────────────────────
+
+## Navigate to $url.
+fn Selenium::goto ($url, $sid = undef) {
+    var %args = (url => $url)
+    Selenium::_decode("goto",
+        selenium__goto(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## pyautogui-style alias: `Selenium::get` matches selenium-python.
+fn Selenium::get ($url, $sid = undef) {
+    Selenium::goto($url, $sid)
+}
+
+## Current page URL.
+fn Selenium::current_url ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("current_url",
+        selenium__current_url(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{url}
+}
+
+## Current page <title>.
+fn Selenium::title ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("title",
+        selenium__title(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{title}
+}
+
+## Full HTML source of the current page.
+fn Selenium::source ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("source",
+        selenium__source(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{source}
+}
+
+## Browser history: back / forward / refresh.
+fn Selenium::back ($sid = undef) {
+    var %args
+    Selenium::_decode("back",
+        selenium__back(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+fn Selenium::forward ($sid = undef) {
+    var %args
+    Selenium::_decode("forward",
+        selenium__forward(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+fn Selenium::refresh ($sid = undef) {
+    var %args
+    Selenium::_decode("refresh",
+        selenium__refresh(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Server-side implicit-wait timeout in seconds — how long any
+## `find` call retries before erroring.
+fn Selenium::set_implicit_wait ($seconds, $sid = undef) {
+    var %args = (seconds => $seconds)
+    Selenium::_decode("set_implicit_wait",
+        selenium__set_implicit_wait(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Page-load timeout in seconds.
+fn Selenium::set_page_load_timeout ($seconds, $sid = undef) {
+    var %args = (seconds => $seconds)
+    Selenium::_decode("set_page_load_timeout",
+        selenium__set_page_load_timeout(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## execute_script() timeout in seconds.
+fn Selenium::set_script_timeout ($seconds, $sid = undef) {
+    var %args = (seconds => $seconds)
+    Selenium::_decode("set_script_timeout",
+        selenium__set_script_timeout(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+# ── element queries ─────────────────────────────────────────────────
+
+## Find the first matching element → element id.
+##   $by defaults to "css". See Selenium::locator_strategies for the list.
+fn Selenium::find ($selector, $by = "css", $sid = undef) {
+    var %args = (selector => $selector, by => $by)
+    val $o = Selenium::_decode("find",
+        selenium__find(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{element}
+}
+
+## Find every matching element → list of ids.
+fn Selenium::find_all ($selector, $by = "css", $sid = undef) {
+    var %args = (selector => $selector, by => $by)
+    val $o = Selenium::_decode("find_all",
+        selenium__find_all(to_json(Selenium::_with_session(%args, $sid))))
+    @{ $o->{elements} }
+}
+
+## Poll `find` until present, then return the element id. Default
+## timeout 10 s; polled every 200 ms.
+fn Selenium::wait_for ($selector, $by = "css", $timeout = 10, $sid = undef) {
+    var %args = (selector => $selector, by => $by, timeout => $timeout)
+    val $o = Selenium::_decode("wait_for",
+        selenium__wait_for(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{element}
+}
+
+# ── element ops ─────────────────────────────────────────────────────
+
+## Click an element by its $eid (from find / find_all / wait_for).
+fn Selenium::click ($eid) {
+    Selenium::_decode("element_click",
+        selenium__element_click(to_json({ element => $eid })))
+    1
+}
+
+## Type $text into an element (chains keypresses; no clearing first).
+fn Selenium::send_keys ($eid, $text) {
+    Selenium::_decode("element_send_keys",
+        selenium__element_send_keys(to_json({ element => $eid, text => $text })))
+    1
+}
+
+## Empty an <input> / <textarea>.
+fn Selenium::clear ($eid) {
+    Selenium::_decode("element_clear",
+        selenium__element_clear(to_json({ element => $eid })))
+    1
+}
+
+## Visible text content of an element.
+fn Selenium::text ($eid) {
+    val $o = Selenium::_decode("element_text",
+        selenium__element_text(to_json({ element => $eid })))
+    $o->{text}
+}
+
+## HTML attribute (or undef if absent).
+fn Selenium::attr ($eid, $name) {
+    val $o = Selenium::_decode("element_attr",
+        selenium__element_attr(to_json({ element => $eid, name => $name })))
+    $o->{value}
+}
+
+## DOM property (live value — differs from `attr` for form fields).
+fn Selenium::prop ($eid, $name) {
+    val $o = Selenium::_decode("element_prop",
+        selenium__element_prop(to_json({ element => $eid, name => $name })))
+    $o->{value}
+}
+
+## Resolved CSS value.
+fn Selenium::css ($eid, $name) {
+    val $o = Selenium::_decode("element_css",
+        selenium__element_css(to_json({ element => $eid, name => $name })))
+    $o->{value}
+}
+
+## Element tag name (lowercase).
+fn Selenium::tag ($eid) {
+    val $o = Selenium::_decode("element_tag",
+        selenium__element_tag(to_json({ element => $eid })))
+    $o->{tag}
+}
+
+## Geometry → ($x, $y, $width, $height).
+fn Selenium::rect ($eid) {
+    val $o = Selenium::_decode("element_rect",
+        selenium__element_rect(to_json({ element => $eid })))
+    ($o->{x}, $o->{y}, $o->{width}, $o->{height})
+}
+
+fn Selenium::is_displayed ($eid) {
+    val $o = Selenium::_decode("element_is_displayed",
+        selenium__element_is_displayed(to_json({ element => $eid })))
+    $o->{value} ? 1 : 0
+}
+
+fn Selenium::is_enabled ($eid) {
+    val $o = Selenium::_decode("element_is_enabled",
+        selenium__element_is_enabled(to_json({ element => $eid })))
+    $o->{value} ? 1 : 0
+}
+
+fn Selenium::is_selected ($eid) {
+    val $o = Selenium::_decode("element_is_selected",
+        selenium__element_is_selected(to_json({ element => $eid })))
+    $o->{value} ? 1 : 0
+}
+
+## Drop a client-side element handle. The server-side WebDriver element
+## stays valid until the page reloads — calling `Selenium::find` again
+## returns a fresh handle.
+fn Selenium::drop ($eid) {
+    val $o = Selenium::_decode("element_drop",
+        selenium__element_drop(to_json({ element => $eid })))
+    $o->{dropped} ? 1 : 0
+}
+
+# ── scripts ─────────────────────────────────────────────────────────
+
+## Run JavaScript against the active browsing context. Return value is
+## whatever `arguments[0]` / `return` produces, parsed from JSON.
+##
+## $args is an arrayref of args passed as `arguments[0..N]` to the script.
+## To pass a Selenium WebElement, wrap it: `{ __element__ => $eid }` —
+## the cdylib unmarshals it into a real DOM element on the JS side.
+##
+## Example:
+##   val $title = Selenium::execute_script("return document.title")
+##   val $tag   = Selenium::execute_script(
+##       "return arguments[0].tagName.toLowerCase()",
+##       [{ __element__ => $eid }],
+##   )
+fn Selenium::execute_script ($script, $args = undef, $sid = undef) {
+    var %args = (script => $script)
+    $args{args} = $args if defined $args
+    val $o = Selenium::_decode("execute_script",
+        selenium__execute_script(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{value}
+}
+
+# ── screenshots ─────────────────────────────────────────────────────
+
+## Capture the page.
+##   Selenium::screenshot()         → \@png_bytes
+##   Selenium::screenshot("p.png")  → writes PNG, returns the path
+fn Selenium::screenshot ($path = undef, $sid = undef) {
+    var %args
+    $args{output} = $path if defined $path
+    val $o = Selenium::_decode("screenshot",
+        selenium__screenshot(to_json(Selenium::_with_session(%args, $sid))))
+    if (defined $path) {
+        return $o->{path}
+    }
+    $o->{png}
+}
+
+## Per-element screenshot.
+##   Selenium::element_screenshot($eid)          → \@png_bytes
+##   Selenium::element_screenshot($eid, "p.png") → writes PNG, returns path
+fn Selenium::element_screenshot ($eid, $path = undef) {
+    var %args = (element => $eid)
+    $args{output} = $path if defined $path
+    val $o = Selenium::_decode("element_screenshot",
+        selenium__element_screenshot(to_json(\%args)))
+    if (defined $path) {
+        return $o->{path}
+    }
+    $o->{png}
+}
+
+# ── windows / frames ────────────────────────────────────────────────
+
+## Window position + size → ($x, $y, $w, $h).
+fn Selenium::window_rect ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("window_rect",
+        selenium__window_rect(to_json(Selenium::_with_session(%args, $sid))))
+    ($o->{x}, $o->{y}, $o->{width}, $o->{height})
+}
+
+## Set window geometry. Any of x/y/width/height may be undef to keep the
+## current value for that field.
+fn Selenium::set_window_rect ($x = undef, $y = undef, $width = undef,
+                              $height = undef, $sid = undef) {
+    var %args
+    $args{x}      = $x      if defined $x
+    $args{y}      = $y      if defined $y
+    $args{width}  = $width  if defined $width
+    $args{height} = $height if defined $height
+    Selenium::_decode("set_window_rect",
+        selenium__set_window_rect(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Convenience: set window size only (keeps current position).
+fn Selenium::set_window_size ($w, $h, $sid = undef) {
+    Selenium::set_window_rect(undef, undef, $w, $h, $sid)
+}
+
+## Convenience: set window position only.
+fn Selenium::set_window_position ($x, $y, $sid = undef) {
+    Selenium::set_window_rect($x, $y, undef, undef, $sid)
+}
+
+## Every window/tab handle in this session.
+fn Selenium::window_handles ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("window_handles",
+        selenium__window_handles(to_json(Selenium::_with_session(%args, $sid))))
+    @{ $o->{handles} }
+}
+
+## Handle for the currently-active window/tab.
+fn Selenium::current_window ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("current_window",
+        selenium__current_window(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{handle}
+}
+
+## Switch focus to a window/tab by handle.
+fn Selenium::switch_window ($handle, $sid = undef) {
+    var %args = (handle => $handle)
+    Selenium::_decode("switch_window",
+        selenium__switch_window(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Switch into an iframe by its element id.
+fn Selenium::switch_frame ($eid, $sid = undef) {
+    var %args = (element => $eid)
+    Selenium::_decode("switch_frame",
+        selenium__switch_frame(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Switch back to the top-level browsing context.
+fn Selenium::switch_default_content ($sid = undef) {
+    var %args
+    Selenium::_decode("switch_default_content",
+        selenium__switch_default_content(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Switch to the parent of the current frame.
+fn Selenium::switch_parent_frame ($sid = undef) {
+    var %args
+    Selenium::_decode("switch_parent_frame",
+        selenium__switch_parent_frame(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+# ── cookies ─────────────────────────────────────────────────────────
+
+## Every cookie visible to the current page → arrayref of hashrefs.
+fn Selenium::cookies ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("cookies",
+        selenium__cookies(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{cookies}
+}
+
+## Add a cookie. %fields: name (required), value (required), path, domain,
+## secure, http_only, same_site ("Strict" / "Lax" / "None"), expiry (unix
+## timestamp).
+fn Selenium::add_cookie (%fields) {
+    val $sid = exists $fields{session} ? delete $fields{session} : undef
+    var %args = (cookie => \%fields)
+    Selenium::_decode("add_cookie",
+        selenium__add_cookie(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Delete a named cookie.
+fn Selenium::delete_cookie ($name, $sid = undef) {
+    var %args = (name => $name)
+    Selenium::_decode("delete_cookie",
+        selenium__delete_cookie(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Delete every cookie visible to the current page.
+fn Selenium::delete_all_cookies ($sid = undef) {
+    var %args
+    Selenium::_decode("delete_all_cookies",
+        selenium__delete_all_cookies(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}

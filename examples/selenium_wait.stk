@@ -1,0 +1,31 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — wait_for with timeout. Loads a page that injects an
+# element after a 2 s setTimeout, then waits up to 10 s for it. Mirrors
+# selenium-python's `WebDriverWait(...).until(EC.presence_of_element_located(...))`.
+#
+# Run:  s examples/selenium_wait.stk
+#
+# Requires: chromedriver running.
+
+p "── wait_for selenium demo ───────────────────────────"
+
+Selenium::open(browser => "chrome", headless => 1)
+
+# Bootstrap a page that pops in an element after a delay — no external
+# website needed, no race against real-world latency.
+Selenium::goto("data:text/html,<body><div id='host'></div><script>setTimeout(()=>{const d=document.createElement('div');d.id='late';d.textContent='hello after 2s';document.body.appendChild(d)},2000)</script></body>")
+
+p "waiting up to 10s for #late to appear..."
+val $t0 = time()
+val $late = Selenium::wait_for("#late", "css", 10)
+val $dt = sprintf("%.2f", time() - $t0)
+p "found after ${dt}s"
+
+p "text: " . Selenium::text($late)
+p "tag:  " . Selenium::tag($late)
+
+Selenium::quit()
+p "done."

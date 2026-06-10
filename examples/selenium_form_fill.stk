@@ -1,0 +1,35 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — fill a form field, submit, read the result. Uses
+# DuckDuckGo because it has no anti-automation gates and a predictable
+# DOM. Same flow you'd use to drive any HTML form: find input → clear →
+# send_keys → click submit → wait for the result.
+#
+# Run:  s examples/selenium_form_fill.stk
+#
+# Requires: chromedriver running.
+
+val $QUERY = "stryke programming language"
+
+p "── form-fill selenium demo ──────────────────────────"
+
+Selenium::open(browser => "chrome", headless => 1)
+Selenium::goto("https://duckduckgo.com/")
+
+p "typing query: $QUERY"
+val $box = Selenium::wait_for('input[name="q"]', "css", 10)
+Selenium::clear($box)
+Selenium::send_keys($box, $QUERY)
+
+p "submitting..."
+val $form = Selenium::find('form[role="search"], form#search_form_homepage, form')
+Selenium::execute_script("arguments[0].submit()", [{ __element__ => $form }])
+
+# Wait for any result link to show up.
+Selenium::wait_for('a[data-testid="result-title-a"], h2 a, article a', "css", 15)
+p "result page title: " . Selenium::title()
+
+Selenium::quit()
+p "done."

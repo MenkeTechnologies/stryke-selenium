@@ -1,0 +1,31 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — open Chrome, navigate to example.com, read the title,
+# quit cleanly. The minimum-viable Selenium script — same shape as the
+# selenium-python README's `webdriver.Chrome().get(...)` walkthrough.
+#
+# Run:  s examples/selenium_basic.stk
+#
+# Requires: chromedriver running.
+#   brew install chromedriver
+#   chromedriver --port=9515 &
+#
+# Selenium::open() with no args defaults to chrome on
+# http://localhost:9515. The first successful open is set as the active
+# session, so subsequent Selenium::* calls don't need to thread the sid.
+
+p "── basic selenium demo ──────────────────────────────"
+
+val $sid = Selenium::open()
+p "opened session #$sid"
+
+Selenium::goto("https://example.com")
+p "loaded:  " . Selenium::current_url()
+p "title:   " . Selenium::title()
+
+p ""
+p "closing session..."
+Selenium::quit()
+p "done."

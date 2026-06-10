@@ -1,0 +1,43 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — two browsers driven in parallel. Each `Selenium::open`
+# returns a fresh session id; passing it as the trailing $sid arg routes
+# the call to that specific browser. Useful for comparison testing
+# (A/B layouts, before/after deploys, cross-browser regressions).
+#
+# Run:  s examples/selenium_multi_session.stk
+#
+# Requires: chromedriver running (one chromedriver process can host
+#           many WebDriver sessions concurrently).
+
+p "── multi-session selenium demo ──────────────────────"
+
+val $sid_a = Selenium::open(browser => "chrome", headless => 1)
+val $sid_b = Selenium::open(browser => "chrome", headless => 1)
+p "opened sessions: a=$sid_a b=$sid_b"
+p "active is the FIRST opened ($sid_a) until set_active is called"
+p "active = " . Selenium::active()
+p "all    = " . join(", ", Selenium::sessions())
+
+# Drive each browser independently.
+Selenium::goto("https://example.com",       $sid_a)
+Selenium::goto("https://www.iana.org",      $sid_b)
+
+p ""
+p "session $sid_a title: " . Selenium::title($sid_a)
+p "session $sid_b title: " . Selenium::title($sid_b)
+
+# Switch the active pointer — convenience for scripts that mostly drive
+# one browser at a time but occasionally hop sessions.
+Selenium::set_active($sid_b)
+p ""
+p "after set_active($sid_b), Selenium::title() (no sid arg) uses b:"
+p "  " . Selenium::title()
+
+# Close both.
+val $n = Selenium::quit_all()
+p ""
+p "quit_all closed $n session(s)"
+p "remaining: " . scalar(Selenium::sessions())

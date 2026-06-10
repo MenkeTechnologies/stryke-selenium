@@ -1,0 +1,54 @@
+#!/usr/bin/env stryke
+use Selenium
+
+
+# Selenium demo — execute_script. Runs JS in the page context with three
+# arg shapes: scalar, WebElement reference, and array. Mirrors
+# selenium-python's `driver.execute_script(...)`.
+#
+# Run:  s examples/selenium_js.stk
+#
+# Requires: chromedriver running.
+
+p "── execute_script selenium demo ─────────────────────"
+
+Selenium::open(browser => "chrome", headless => 1)
+Selenium::goto("https://example.com")
+
+# 1. Pure JS — no args. Return the page's user agent.
+val $ua = Selenium::execute_script("return navigator.userAgent")
+p "userAgent:"
+p "  $ua"
+
+# 2. Pass a scalar arg and get a computed result.
+val $sum = Selenium::execute_script(
+    "return arguments[0] + arguments[1]",
+    [40, 2],
+)
+p ""
+p "40 + 2 (in JS) = $sum"
+
+# 3. Pass a WebElement — { __element__ => $eid } unmarshals to a real
+#    DOM element on the JS side.
+val $h1 = Selenium::find("h1")
+val $stats = Selenium::execute_script(
+    "const e = arguments[0]; return { tag: e.tagName, text: e.textContent, attrs: e.attributes.length }",
+    [{ __element__ => $h1 }],
+)
+p ""
+p "h1 stats:"
+p "  tag:   $stats->{tag}"
+p "  text:  $stats->{text}"
+p "  attrs: $stats->{attrs}"
+
+# 4. Mutate the DOM. Read back via stryke API to verify.
+Selenium::execute_script(
+    "arguments[0].textContent = 'hello from stryke'",
+    [{ __element__ => $h1 }],
+)
+p ""
+p "after JS mutation:"
+p "  h1 text now = " . Selenium::text($h1)
+
+Selenium::quit()
+p "done."

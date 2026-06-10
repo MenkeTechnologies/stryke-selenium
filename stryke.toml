@@ -1,0 +1,78 @@
+[package]
+name = "stryke-selenium"
+version = "0.1.0"
+description = "Selenium WebDriver automation (browser launch, navigation, find/click/send_keys, JS, screenshot, cookies, windows, frames) for stryke. cdylib package — loaded in-process via dlopen on first `use Selenium`. A process-global tokio runtime bridges thirtyfour's async API to the sync FFI; WebDriver sessions and WebElement handles persist across calls."
+authors = ["MenkeTechnologies"]
+license = "MIT"
+repository = "https://github.com/MenkeTechnologies/stryke-selenium"
+edition = "2026"
+
+[ffi]
+lib-name = "stryke_selenium"
+namespace = "Selenium"
+exports = [
+    "selenium__open",
+    "selenium__quit",
+    "selenium__quit_all",
+    "selenium__sessions",
+    "selenium__active",
+    "selenium__set_active",
+    "selenium__supported_browsers",
+    "selenium__locator_strategies",
+    "selenium__goto",
+    "selenium__current_url",
+    "selenium__title",
+    "selenium__source",
+    "selenium__back",
+    "selenium__forward",
+    "selenium__refresh",
+    "selenium__find",
+    "selenium__find_all",
+    "selenium__wait_for",
+    "selenium__element_click",
+    "selenium__element_send_keys",
+    "selenium__element_clear",
+    "selenium__element_text",
+    "selenium__element_attr",
+    "selenium__element_prop",
+    "selenium__element_css",
+    "selenium__element_tag",
+    "selenium__element_rect",
+    "selenium__element_is_displayed",
+    "selenium__element_is_enabled",
+    "selenium__element_is_selected",
+    "selenium__element_drop",
+    "selenium__execute_script",
+    "selenium__screenshot",
+    "selenium__element_screenshot",
+    "selenium__window_rect",
+    "selenium__set_window_rect",
+    "selenium__window_handles",
+    "selenium__current_window",
+    "selenium__switch_window",
+    "selenium__switch_frame",
+    "selenium__switch_default_content",
+    "selenium__switch_parent_frame",
+    "selenium__cookies",
+    "selenium__add_cookie",
+    "selenium__delete_cookie",
+    "selenium__delete_all_cookies",
+    "selenium__set_implicit_wait",
+    "selenium__set_page_load_timeout",
+    "selenium__set_script_timeout",
+]
+
+# Installable smoke-test launcher. `s pkg install -g` writes
+# ~/.stryke/bin/selenium-test as a sh shim that execs stryke against the
+# store entry's bin/selenium-test.stk. Permission-free: exercises only the
+# static FFI dispatch surface (supported_browsers, locator_strategies,
+# sessions), so it works without a running WebDriver server.
+[bin]
+selenium-test = "bin/selenium-test.stk"
+
+[scripts]
+build = "cargo build --release"
+build-debug = "cargo build"
+clean = "cargo clean"
+test = "s test t/"
+install = "s pkg install -g ."
