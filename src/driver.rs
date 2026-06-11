@@ -208,3 +208,75 @@ pub fn by_from(strategy: &str, selector: String) -> Result<By> {
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // thirtyfour's `By` keeps its inner `BySelector` private, but `By: Display`
+    // (delegating to `BySelector::Display`) is the only public surface that
+    // distinguishes which variant was chosen AND what query string it carries.
+    // That's exactly what we want to pin: a refactor of the `by_from` match
+    // that swaps the variant or mangles the selector would change this string.
+    fn rendered(strategy: &str, selector: &str) -> String {
+        format!("{}", by_from(strategy, selector.to_string()).unwrap())
+    }
+
+    #[test]
+    fn strategy_match_is_ascii_case_insensitive() {
+        // `by_from` lower-cases the strategy before matching. A caller passing
+        // "XPath" / "CSS" (the casing selenium docs use) must NOT fall into the
+        // unknown-strategy error arm. Pin both the case-fold AND the variant so
+        // a regression that drops `.to_ascii_lowercase()` is caught here rather
+        // than as a runtime "unknown locator strategy" at the WebDriver call.
+        assert_eq!(rendered("XPath", "//a[@id='x']"), "XPath(//a[@id='x'])");
+        assert_eq!(rendered("CSS", "div.box"), "CSS(div.box)");
+        assert_eq!(rendered("ID", "main"), "Id(main)");
+    }
+
+    #[test]
+    fn aliases_resolve_to_the_same_selector() {
+        // Each canonical strategy has a documented alias that must produce a
+        // byte-identical selector. If the alias arm drifts (e.g. someone maps
+        // "css_selector" to By::Id by mistake, or forgets the `| "link"` arm),
+        // these equalities break. The `name`/`tag`/`class` cases also pin the
+        // CSS-rewrite thirtyfour applies (Name -> `[name="q"]`, class -> `.q`),
+        // so a stryke script using `by => "name"` keeps targeting the attribute
+        // selector and not, say, a literal tag named "q".
+        assert_eq!(rendered("css_selector", "a"), rendered("css", "a"));
+        assert_eq!(rendered("tag_name", "div"), rendered("tag", "div"));
+        assert_eq!(rendered("class_name", "btn"), rendered("class", "btn"));
+        assert_eq!(rendered("link", "Home"), rendered("link_text", "Home"));
+        assert_eq!(rendered("plink", "Ho"), rendered("partial_link_text", "Ho"));
+        // Name is rewritten to a CSS attribute selector, not a bare token.
+        assert_eq!(rendered("name", "q"), r#"CSS([name="q"])"#);
+        assert_eq!(rendered("tag", "q"), "CSS(q)");
+    }
+
+    #[test]
+    fn unknown_strategy_errors_and_quotes_the_offender() {
+        // Empty string and a near-miss ("xpaths") must error rather than
+        // silently defaulting to CSS — a silent default would send a malformed
+        // selector to WebDriver and surface as a confusing find() failure far
+        // from the typo. The error text must echo the bad strategy so the
+        // stryke `die` message is actionable.
+        let err = by_from("xpaths", "//a".to_string())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("xpaths"),
+            "error should name the bad strategy: {err}"
+        );
+        assert!(by_from("", "x".to_string()).is_err());
+    }
+
+    #[test]
+    fn selector_with_unicode_passes_through_untouched() {
+        // The strategy is case-folded but the SELECTOR must not be — it is
+        // taken by value and handed to `By::*` verbatim. A multi-byte selector
+        // (emoji + combining chars) would corrupt if anyone added byte-index
+        // slicing or case-folding to the selector path. Pin the round-trip.
+        let sel = "a[title=\"café 🚀\"]";
+        assert_eq!(rendered("css", sel), format!("CSS({sel})"));
+    }
+}
