@@ -53,7 +53,7 @@ in `src/lib.rs` is a JSON-string-in / JSON-string-out wrapper around the
 `use Selenium`:
 
 1. stryke's package resolver finds the installed package in
-   `~/.stryke/store/selenium@<version>/`.
+   `~/.stryke/store/stryke-selenium@<version>/`.
 2. The package's `[ffi]` section names the exports.
 3. stryke `dlopen`s `lib/libstryke_selenium.{dylib,so}` next to
    `lib/Selenium.stk`.
@@ -89,7 +89,7 @@ s pkg install -g github.com/MenkeTechnologies/stryke-selenium
 This fetches the prebuilt release tarball for your host triple
 (`aarch64-apple-darwin`, `x86_64-apple-darwin`,
 `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`), verifies its
-SHA-256, extracts into `~/.stryke/store/selenium@<version>/`, and
+SHA-256, extracts into `~/.stryke/store/stryke-selenium@<version>/`, and
 registers the cdylib for `use Selenium`. No `cargo`, no `rustc`, no
 per-target build step on the user's machine.
 
