@@ -97,6 +97,15 @@ pub fn text(id: u64) -> Result<String> {
     block_on(async move { elem.text().await.map_err(|e| anyhow!("text failed: {e}")) })
 }
 
+pub fn scroll_into_view(id: u64) -> Result<()> {
+    let elem = get_element(id)?;
+    block_on(async move {
+        elem.scroll_into_view()
+            .await
+            .map_err(|e| anyhow!("scroll_into_view failed: {e}"))
+    })
+}
+
 pub fn attr(id: u64, name: String) -> Result<Option<String>> {
     let elem = get_element(id)?;
     block_on(async move {

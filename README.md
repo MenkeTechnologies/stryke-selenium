@@ -202,6 +202,8 @@ by `Selenium::open`. Omit it to use the active session.
 |----------|---------|
 | `Selenium::screenshot($path?, $sid?)` | `$path` if given, else `\@png_bytes` |
 | `Selenium::element_screenshot($eid, $path?)` | same shape |
+| `Selenium::print_page($path, $sid?)` | writes the page as PDF, returns `$path` |
+| `Selenium::scroll_to_element($eid)` | scroll element into the viewport |
 
 ### Window / frame
 

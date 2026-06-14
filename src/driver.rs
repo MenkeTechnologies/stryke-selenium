@@ -154,6 +154,20 @@ pub fn refresh(id: Option<u64>) -> Result<()> {
     })
 }
 
+/// Print the current page to a PDF, written to `path`. Returns the path.
+pub fn print_page(id: Option<u64>, path: &str) -> Result<String> {
+    let drv = resolve_session(id)?;
+    let path = path.to_string();
+    block_on(async move {
+        let pdf = drv
+            .print_page(thirtyfour::common::print::PrintParameters::default())
+            .await
+            .map_err(|e| anyhow!("print_page failed: {e}"))?;
+        std::fs::write(&path, pdf).map_err(|e| anyhow!("writing pdf {path}: {e}"))?;
+        Ok(path)
+    })
+}
+
 pub fn accept_alert(id: Option<u64>) -> Result<()> {
     let drv = resolve_session(id)?;
     block_on(async move {

@@ -546,3 +546,20 @@ fn Selenium::fullscreen ($sid = undef) {
         selenium__fullscreen(to_json(Selenium::_with_session(%args, $sid))))
     1
 }
+
+# ── element scroll + print ───────────────────────────────────────────
+
+## Scroll element $eid into the viewport.
+fn Selenium::scroll_to_element ($eid) {
+    var %args = (element => $eid)
+    Selenium::_decode("scroll_to_element", selenium__scroll_to_element(to_json(\%args)))
+    1
+}
+
+## Print the current page to a PDF at $path (Chrome/Firefox headless). Returns
+## the path.
+fn Selenium::print_page ($path, $sid = undef) {
+    var %args = (output => $path)
+    Selenium::_decode("print_page",
+        selenium__print_page(to_json(Selenium::_with_session(%args, $sid))))->{path}
+}

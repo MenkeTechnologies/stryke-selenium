@@ -354,6 +354,22 @@ pub extern "C" fn selenium__element_text(args: *const c_char) -> *const c_char {
 }
 
 #[no_mangle]
+pub extern "C" fn selenium__scroll_to_element(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        element::scroll_into_view(arg_element(&v, "element")?)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__print_page(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let path = arg_str(&v, "output")?.to_string();
+        Ok(json!({ "path": driver::print_page(arg_session(&v), &path)? }))
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn selenium__element_attr(args: *const c_char) -> *const c_char {
     ffi_call(args, |v| {
         let name = arg_str(&v, "name")?.to_string();
