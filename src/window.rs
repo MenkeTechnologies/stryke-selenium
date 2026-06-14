@@ -63,6 +63,33 @@ pub fn set_window_rect(
     })
 }
 
+pub fn maximize(session: Option<u64>) -> Result<()> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        drv.maximize_window()
+            .await
+            .map_err(|e| anyhow!("maximize failed: {e}"))
+    })
+}
+
+pub fn minimize(session: Option<u64>) -> Result<()> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        drv.minimize_window()
+            .await
+            .map_err(|e| anyhow!("minimize failed: {e}"))
+    })
+}
+
+pub fn fullscreen(session: Option<u64>) -> Result<()> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        drv.fullscreen_window()
+            .await
+            .map_err(|e| anyhow!("fullscreen failed: {e}"))
+    })
+}
+
 pub fn window_handles(session: Option<u64>) -> Result<Vec<String>> {
     let drv = resolve_session(session)?;
     block_on(async move {

@@ -228,6 +228,38 @@ pub extern "C" fn selenium__refresh(args: *const c_char) -> *const c_char {
 }
 
 #[no_mangle]
+pub extern "C" fn selenium__accept_alert(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        driver::accept_alert(arg_session(&v))?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__dismiss_alert(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        driver::dismiss_alert(arg_session(&v))?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__alert_text(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "text": driver::alert_text(arg_session(&v))? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__send_alert_text(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let text = arg_str(&v, "text")?.to_string();
+        driver::send_alert_text(arg_session(&v), &text)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn selenium__set_implicit_wait(args: *const c_char) -> *const c_char {
     ffi_call(args, |v| {
         let s = v["seconds"].as_f64().unwrap_or(0.0);
@@ -446,6 +478,30 @@ pub extern "C" fn selenium__set_window_rect(args: *const c_char) -> *const c_cha
         let w = v["width"].as_u64().map(|n| n as u32);
         let h = v["height"].as_u64().map(|n| n as u32);
         window::set_window_rect(arg_session(&v), x, y, w, h)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__maximize(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        window::maximize(arg_session(&v))?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__minimize(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        window::minimize(arg_session(&v))?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__fullscreen(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        window::fullscreen(arg_session(&v))?;
         Ok(json!({}))
     })
 }

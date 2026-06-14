@@ -217,6 +217,18 @@ by `Selenium::open`. Omit it to use the active session.
 | `Selenium::switch_frame($eid, $sid?)` | enter iframe by element |
 | `Selenium::switch_default_content($sid?)` | back to top |
 | `Selenium::switch_parent_frame($sid?)` | one level out |
+| `Selenium::maximize($sid?)` | maximize the window |
+| `Selenium::minimize($sid?)` | minimize the window |
+| `Selenium::fullscreen($sid?)` | fullscreen the window |
+
+### Alerts
+
+| Function | Notes |
+|----------|-------|
+| `Selenium::accept_alert($sid?)` | click OK on alert/confirm/prompt |
+| `Selenium::dismiss_alert($sid?)` | click Cancel |
+| `Selenium::alert_text($sid?)` | text of the current alert |
+| `Selenium::send_alert_text($text, $sid?)` | type into a JS prompt |
 
 ### Cookies
 

@@ -26,6 +26,13 @@ exports = [
     "selenium__back",
     "selenium__forward",
     "selenium__refresh",
+    "selenium__accept_alert",
+    "selenium__dismiss_alert",
+    "selenium__alert_text",
+    "selenium__send_alert_text",
+    "selenium__set_implicit_wait",
+    "selenium__set_page_load_timeout",
+    "selenium__set_script_timeout",
     "selenium__find",
     "selenium__find_all",
     "selenium__wait_for",
@@ -47,6 +54,9 @@ exports = [
     "selenium__element_screenshot",
     "selenium__window_rect",
     "selenium__set_window_rect",
+    "selenium__maximize",
+    "selenium__minimize",
+    "selenium__fullscreen",
     "selenium__window_handles",
     "selenium__current_window",
     "selenium__switch_window",
@@ -57,9 +67,6 @@ exports = [
     "selenium__add_cookie",
     "selenium__delete_cookie",
     "selenium__delete_all_cookies",
-    "selenium__set_implicit_wait",
-    "selenium__set_page_load_timeout",
-    "selenium__set_script_timeout",
 ]
 
 # Installable smoke-test launcher. `s pkg install -g` writes

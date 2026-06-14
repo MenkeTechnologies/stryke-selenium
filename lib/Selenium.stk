@@ -486,3 +486,63 @@ fn Selenium::delete_all_cookies ($sid = undef) {
         selenium__delete_all_cookies(to_json(Selenium::_with_session(%args, $sid))))
     1
 }
+
+# ── alerts ───────────────────────────────────────────────────────────
+
+## Accept the current JS alert / confirm / prompt (clicks OK).
+fn Selenium::accept_alert ($sid = undef) {
+    var %args
+    Selenium::_decode("accept_alert",
+        selenium__accept_alert(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Dismiss the current JS alert / confirm / prompt (clicks Cancel).
+fn Selenium::dismiss_alert ($sid = undef) {
+    var %args
+    Selenium::_decode("dismiss_alert",
+        selenium__dismiss_alert(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Return the text of the current JS alert.
+fn Selenium::alert_text ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("alert_text",
+        selenium__alert_text(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{text}
+}
+
+## Type $text into the current JS prompt.
+fn Selenium::send_alert_text ($text, $sid = undef) {
+    var %args = (text => $text)
+    Selenium::_decode("send_alert_text",
+        selenium__send_alert_text(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+# ── window state ─────────────────────────────────────────────────────
+
+## Maximize the current window.
+fn Selenium::maximize ($sid = undef) {
+    var %args
+    Selenium::_decode("maximize",
+        selenium__maximize(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Minimize the current window.
+fn Selenium::minimize ($sid = undef) {
+    var %args
+    Selenium::_decode("minimize",
+        selenium__minimize(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Put the current window into fullscreen mode.
+fn Selenium::fullscreen ($sid = undef) {
+    var %args
+    Selenium::_decode("fullscreen",
+        selenium__fullscreen(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}

@@ -154,6 +154,43 @@ pub fn refresh(id: Option<u64>) -> Result<()> {
     })
 }
 
+pub fn accept_alert(id: Option<u64>) -> Result<()> {
+    let drv = resolve_session(id)?;
+    block_on(async move {
+        drv.accept_alert()
+            .await
+            .map_err(|e| anyhow!("accept_alert failed: {e}"))
+    })
+}
+
+pub fn dismiss_alert(id: Option<u64>) -> Result<()> {
+    let drv = resolve_session(id)?;
+    block_on(async move {
+        drv.dismiss_alert()
+            .await
+            .map_err(|e| anyhow!("dismiss_alert failed: {e}"))
+    })
+}
+
+pub fn alert_text(id: Option<u64>) -> Result<String> {
+    let drv = resolve_session(id)?;
+    block_on(async move {
+        drv.get_alert_text()
+            .await
+            .map_err(|e| anyhow!("alert_text failed: {e}"))
+    })
+}
+
+pub fn send_alert_text(id: Option<u64>, text: &str) -> Result<()> {
+    let drv = resolve_session(id)?;
+    let text = text.to_string();
+    block_on(async move {
+        drv.send_alert_text(text)
+            .await
+            .map_err(|e| anyhow!("send_alert_text failed: {e}"))
+    })
+}
+
 pub fn set_implicit_wait(id: Option<u64>, seconds: f64) -> Result<()> {
     let drv = resolve_session(id)?;
     let dur = std::time::Duration::from_secs_f64(seconds.max(0.0));
