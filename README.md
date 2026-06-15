@@ -251,6 +251,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::build_locator($strategy, $value)` | `→ { locator, strategy }` — inverse of `parse_locator`; canonicalizes the strategy, rejects unknowns |
 | `Selenium::valid_locator_strategy($s)` | `→ { strategy, valid, canonical }` |
 | `Selenium::parse_cookie("a=b; Path=/; Secure")` | `→ { name, value, domain, path, secure, http_only, same_site, expires }` — feeds `add_cookie` |
+| `Selenium::build_cookie(%opts)` | `→ Set-Cookie string` — inverse of `parse_cookie`; truthy `secure`/`http_only` become bare flags |
 
 ## [0x04] Launching a WebDriver server
 

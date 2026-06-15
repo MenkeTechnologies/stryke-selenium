@@ -592,3 +592,10 @@ fn Selenium::valid_locator_strategy ($strategy) {
 fn Selenium::parse_cookie ($cookie) {
     Selenium::_decode("parse_cookie", selenium__parse_cookie(to_json({ cookie => $cookie })))
 }
+
+## Build a Set-Cookie-style string from structured fields — inverse of
+## parse_cookie. %opts: name (required), value, domain, path, same_site,
+## expires, secure, http_only (the last two are bare flags when truthy).
+fn Selenium::build_cookie (%opts) {
+    Selenium::_decode("build_cookie", selenium__build_cookie(to_json(\%opts)))->{cookie}
+}

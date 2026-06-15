@@ -701,6 +701,43 @@ fn op_parse_cookie(v: Value) -> Result<Value> {
     }))
 }
 
+/// Build a `Set-Cookie`-style string from structured fields — the inverse of
+/// `parse_cookie`. opts: `name` (required), `value`, and optional `domain`,
+/// `path`, `same_site`, `expires`; `secure`/`http_only` are emitted as bare
+/// flags when truthy (bool, nonzero number, or "1"/"true" — matching stryke's
+/// flag serialization). Pure.
+fn op_build_cookie(v: Value) -> Result<Value> {
+    let name = arg_str(&v, "name")?;
+    let value = v.get("value").and_then(Value::as_str).unwrap_or("");
+    let mut out = format!("{name}={value}");
+    let attr = |k: &str| v.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
+    if let Some(d) = attr("domain") {
+        out.push_str(&format!("; Domain={d}"));
+    }
+    if let Some(p) = attr("path") {
+        out.push_str(&format!("; Path={p}"));
+    }
+    if let Some(ss) = attr("same_site") {
+        out.push_str(&format!("; SameSite={ss}"));
+    }
+    if let Some(e) = attr("expires") {
+        out.push_str(&format!("; Expires={e}"));
+    }
+    let truthy = |k: &str| match v.get(k) {
+        Some(Value::Bool(b)) => *b,
+        Some(Value::Number(n)) => n.as_i64().map(|i| i != 0).unwrap_or(false),
+        Some(Value::String(s)) => s == "1" || s.eq_ignore_ascii_case("true"),
+        _ => false,
+    };
+    if truthy("secure") {
+        out.push_str("; Secure");
+    }
+    if truthy("http_only") {
+        out.push_str("; HttpOnly");
+    }
+    Ok(json!({"cookie": out}))
+}
+
 #[no_mangle]
 pub extern "C" fn selenium__parse_locator(args: *const c_char) -> *const c_char {
     ffi_call(args, op_parse_locator)
@@ -719,6 +756,11 @@ pub extern "C" fn selenium__valid_locator_strategy(args: *const c_char) -> *cons
 #[no_mangle]
 pub extern "C" fn selenium__parse_cookie(args: *const c_char) -> *const c_char {
     ffi_call(args, op_parse_cookie)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_build_cookie)
 }
 
 #[cfg(test)]
@@ -881,5 +923,36 @@ mod tests {
         assert_eq!(v["value"], json!("a=b=c"), "value keeps later = signs");
         assert_eq!(v["secure"], json!(false));
         assert!(op_parse_cookie(json!({"cookie": "noequalshere"})).is_err());
+    }
+
+    #[test]
+    fn build_cookie_inverts_parse_cookie() {
+        // Full set of fields → Set-Cookie string, round-trips through parse.
+        let built = op_build_cookie(json!({
+            "name": "session", "value": "abc123", "domain": ".example.com",
+            "path": "/", "same_site": "Lax", "secure": true, "http_only": true
+        }))
+        .unwrap()["cookie"]
+            .clone();
+        assert_eq!(
+            built,
+            json!("session=abc123; Domain=.example.com; Path=/; SameSite=Lax; Secure; HttpOnly")
+        );
+        let back = op_parse_cookie(json!({"cookie": built})).unwrap();
+        assert_eq!(back["name"], json!("session"));
+        assert_eq!(back["secure"], json!(true));
+        assert_eq!(back["http_only"], json!(true));
+        assert_eq!(back["same_site"], json!("Lax"));
+        // Minimal cookie; flags absent.
+        assert_eq!(
+            op_build_cookie(json!({"name": "k", "value": "v"})).unwrap()["cookie"],
+            json!("k=v")
+        );
+        // stryke serializes a truthy flag as the number 1, not a bool.
+        assert_eq!(
+            op_build_cookie(json!({"name": "k", "value": "v", "secure": 1})).unwrap()["cookie"],
+            json!("k=v; Secure")
+        );
+        assert!(op_build_cookie(json!({"value": "v"})).is_err());
     }
 }

@@ -81,4 +81,9 @@ assert_eq $ck->{domain}, ".example.com",  "parse_cookie: domain"
 assert_eq $ck->{secure}, 1,               "parse_cookie: secure flag"
 assert_eq $ck->{http_only}, 1,            "parse_cookie: http_only flag"
 
+# build_cookie: inverse of parse_cookie (truthy flags become bare attributes).
+assert_eq Selenium::build_cookie(name => "session", value => "abc123", domain => ".example.com", path => "/", same_site => "Lax", secure => 1, http_only => 1), "session=abc123; Domain=.example.com; Path=/; SameSite=Lax; Secure; HttpOnly", "build_cookie: full Set-Cookie string"
+assert_eq Selenium::build_cookie(name => "k", value => "v"), "k=v", "build_cookie: minimal cookie, no flags"
+assert_eq Selenium::parse_cookie(Selenium::build_cookie(name => "s", value => "x", secure => 1))->{secure}, 1, "build_cookie → parse_cookie round-trips the Secure flag"
+
 test_run
