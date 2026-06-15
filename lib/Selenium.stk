@@ -596,6 +596,14 @@ fn Selenium::locator_to_w3c ($strategy, $value = undef) {
     Selenium::_decode("locator_to_w3c", selenium__locator_to_w3c(to_json($req)))
 }
 
+## Resolve a WebDriver special key name to its Private-Use-Area code point ("Enter"
+## → U+E007), as send_keys uses to press control/navigation keys. Names are
+## case-insensitive and ignore _/-/spaces; F1–F12 and aliases (esc, ctrl, del,
+## arrowup) work. Returns a hashref { key, code_point, codepoint, char }.
+fn Selenium::key_code ($key) {
+    Selenium::_decode("key_code", selenium__key_code(to_json({ key => $key })))
+}
+
 ## Parse a Set-Cookie-style string into the structured cookie add_cookie wants:
 ## { name, value, domain, path, secure, http_only, same_site, expires }.
 fn Selenium::parse_cookie ($cookie) {

@@ -706,6 +706,63 @@ fn op_locator_to_w3c(v: Value) -> Result<Value> {
     Ok(json!({"using": using, "value": w3c_value, "strategy": strategy}))
 }
 
+/// Resolve a WebDriver special key name to its Unicode code point. Selenium and
+/// the W3C WebDriver spec assign control/navigation keys to the Private Use Area
+/// (`NULL` U+E000 … `DELETE` U+E017, `F1`–`F12` U+E031–U+E03C); `send_keys`
+/// inserts these characters to press the key. Names are case-insensitive and
+/// ignore `_`/`-`/spaces; common aliases (`esc`, `ctrl`, `del`, `arrowup`) are
+/// accepted. Note `return` (U+E006) differs from `enter` (U+E007). opts: `key`
+/// (required). Returns `{key, code_point, codepoint, char}`. Pure.
+fn op_key_code(v: Value) -> Result<Value> {
+    let name = v
+        .get("key")
+        .or_else(|| v.get("name"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("missing key"))?;
+    let norm: String = name
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| !matches!(c, '_' | '-' | ' '))
+        .collect();
+    let cp: u32 = match norm.as_str() {
+        "null" => 0xE000,
+        "cancel" => 0xE001,
+        "help" => 0xE002,
+        "backspace" => 0xE003,
+        "tab" => 0xE004,
+        "clear" => 0xE005,
+        "return" => 0xE006,
+        "enter" => 0xE007,
+        "shift" => 0xE008,
+        "control" | "ctrl" => 0xE009,
+        "alt" => 0xE00A,
+        "pause" => 0xE00B,
+        "escape" | "esc" => 0xE00C,
+        "space" => 0xE00D,
+        "pageup" => 0xE00E,
+        "pagedown" => 0xE00F,
+        "end" => 0xE010,
+        "home" => 0xE011,
+        "left" | "arrowleft" => 0xE012,
+        "up" | "arrowup" => 0xE013,
+        "right" | "arrowright" => 0xE014,
+        "down" | "arrowdown" => 0xE015,
+        "insert" | "ins" => 0xE016,
+        "delete" | "del" => 0xE017,
+        other => match other.strip_prefix('f').and_then(|d| d.parse::<u32>().ok()) {
+            Some(n) if (1..=12).contains(&n) => 0xE031 + (n - 1),
+            _ => return Err(anyhow::anyhow!("unknown WebDriver key `{name}`")),
+        },
+    };
+    let ch = char::from_u32(cp).expect("WebDriver PUA code point is a valid scalar");
+    Ok(json!({
+        "key": name,
+        "code_point": format!("U+{cp:04X}"),
+        "codepoint": cp,
+        "char": ch.to_string(),
+    }))
+}
+
 /// Parse a `Set-Cookie`-style string `name=value; Domain=…; Path=/; Secure;
 /// HttpOnly; SameSite=Lax` into the structured cookie `add_cookie` wants. Pure.
 fn op_parse_cookie(v: Value) -> Result<Value> {
@@ -805,6 +862,11 @@ pub extern "C" fn selenium__valid_locator_strategy(args: *const c_char) -> *cons
 #[no_mangle]
 pub extern "C" fn selenium__locator_to_w3c(args: *const c_char) -> *const c_char {
     ffi_call(args, op_locator_to_w3c)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__key_code(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_key_code)
 }
 
 #[no_mangle]
@@ -986,6 +1048,66 @@ mod tests {
             json!("css selector")
         );
         assert!(op_locator_to_w3c(json!({"locator": "bogus=x"})).is_err());
+    }
+
+    #[test]
+    fn key_code_resolves_webdriver_pua_code_points() {
+        // Canonical code points from Selenium's Key enum.
+        let enter = op_key_code(json!({"key": "Enter"})).unwrap();
+        assert_eq!(enter["codepoint"], json!(0xE007));
+        assert_eq!(enter["code_point"], json!("U+E007"));
+        assert_eq!(enter["char"], json!("\u{E007}"));
+        // Return (E006) is a DIFFERENT key from Enter (E007).
+        assert_eq!(
+            op_key_code(json!({"key": "Return"})).unwrap()["codepoint"],
+            json!(0xE006)
+        );
+        // A spread of named keys.
+        for (name, cp) in [
+            ("null", 0xE000),
+            ("Tab", 0xE004),
+            ("ESCAPE", 0xE00C),
+            ("space", 0xE00D),
+            ("Home", 0xE011),
+            ("ArrowUp", 0xE013),
+            ("delete", 0xE017),
+        ] {
+            assert_eq!(
+                op_key_code(json!({ "key": name })).unwrap()["codepoint"],
+                json!(cp),
+                "{name} → {cp:#X}"
+            );
+        }
+        // Aliases and normalization (case / separators).
+        assert_eq!(
+            op_key_code(json!({"key": "esc"})).unwrap()["codepoint"],
+            json!(0xE00C)
+        );
+        assert_eq!(
+            op_key_code(json!({"key": "ctrl"})).unwrap()["codepoint"],
+            json!(0xE009)
+        );
+        assert_eq!(
+            op_key_code(json!({"key": "page_up"})).unwrap()["codepoint"],
+            json!(0xE00E)
+        );
+        assert_eq!(
+            op_key_code(json!({"key": "ARROW-DOWN"})).unwrap()["codepoint"],
+            json!(0xE015)
+        );
+        // Function keys F1..F12 are contiguous from E031.
+        assert_eq!(
+            op_key_code(json!({"key": "F1"})).unwrap()["codepoint"],
+            json!(0xE031)
+        );
+        assert_eq!(
+            op_key_code(json!({"key": "f12"})).unwrap()["codepoint"],
+            json!(0xE03C)
+        );
+        // Out-of-range function key and unknown name reject.
+        assert!(op_key_code(json!({"key": "F13"})).is_err());
+        assert!(op_key_code(json!({"key": "nope"})).is_err());
+        assert!(op_key_code(json!({})).is_err());
     }
 
     #[test]

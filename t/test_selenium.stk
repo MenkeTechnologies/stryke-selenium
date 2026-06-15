@@ -86,6 +86,15 @@ assert_eq Selenium::locator_to_w3c("name", "q")->{value}, "[name=\"q\"]", "locat
 assert_eq Selenium::locator_to_w3c("class", "active")->{value}, "[class~=\"active\"]", "locator_to_w3c: class → [class~=...]"
 assert_dies fn { Selenium::locator_to_w3c("bogus=x") }, "locator_to_w3c: rejects unknown strategy"
 
+# key_code: WebDriver special-key Private-Use-Area code points.
+assert_eq Selenium::key_code("Enter")->{code_point}, "U+E007", "key_code: Enter is U+E007"
+assert_eq Selenium::key_code("Return")->{codepoint}, 57350,    "key_code: Return (E006) differs from Enter"
+assert_eq Selenium::key_code("Tab")->{code_point},   "U+E004", "key_code: Tab"
+assert_eq Selenium::key_code("esc")->{code_point},   "U+E00C", "key_code: esc alias → Escape"
+assert_eq Selenium::key_code("arrow_up")->{code_point}, "U+E013", "key_code: ArrowUp, normalized name"
+assert_eq Selenium::key_code("F12")->{code_point},   "U+E03C", "key_code: F12"
+assert_dies fn { Selenium::key_code("nope") }, "key_code: rejects an unknown key"
+
 val $ck = Selenium::parse_cookie("session=abc123; Domain=.example.com; Path=/; Secure; HttpOnly")
 assert_eq $ck->{name},   "session",       "parse_cookie: name"
 assert_eq $ck->{value},  "abc123",        "parse_cookie: value"
