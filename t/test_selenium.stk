@@ -95,6 +95,14 @@ assert_eq Selenium::key_code("arrow_up")->{code_point}, "U+E013", "key_code: Arr
 assert_eq Selenium::key_code("F12")->{code_point},   "U+E03C", "key_code: F12"
 assert_dies fn { Selenium::key_code("nope") }, "key_code: rejects an unknown key"
 
+# key_name: inverse — WebDriver PUA code point → canonical key name.
+assert_eq Selenium::key_name(codepoint => 57351)->{key}, "enter",  "key_name: U+E007 is enter"
+assert_eq Selenium::key_name(codepoint => 57350)->{key}, "return", "key_name: U+E006 is return (distinct from enter)"
+assert_eq Selenium::key_name(codepoint => 57356)->{key}, "escape", "key_name: alias collapses to escape"
+assert_eq Selenium::key_name(codepoint => 57393)->{key}, "f1",     "key_name: U+E031 is f1"
+assert_eq Selenium::key_name(char => Selenium::key_code("ArrowUp")->{char})->{key}, "up", "key_name: round-trips key_code via char"
+assert_dies fn { Selenium::key_name(codepoint => 57376) }, "key_name: rejects an unassigned code point"
+
 val $ck = Selenium::parse_cookie("session=abc123; Domain=.example.com; Path=/; Secure; HttpOnly")
 assert_eq $ck->{name},   "session",       "parse_cookie: name"
 assert_eq $ck->{value},  "abc123",        "parse_cookie: value"

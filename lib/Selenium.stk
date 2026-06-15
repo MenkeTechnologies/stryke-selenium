@@ -604,6 +604,13 @@ fn Selenium::key_code ($key) {
     Selenium::_decode("key_code", selenium__key_code(to_json({ key => $key })))
 }
 
+## Resolve a WebDriver PUA code point back to its canonical key name — inverse
+## of key_code. %opts: codepoint (integer) or char (the PUA character). Returns
+## a hashref { key, code_point, codepoint, char }; return/enter stay distinct.
+fn Selenium::key_name (%opts) {
+    Selenium::_decode("key_name", selenium__key_name(to_json(\%opts)))
+}
+
 ## Parse a Set-Cookie-style string into the structured cookie add_cookie wants:
 ## { name, value, domain, path, secure, http_only, same_site, expires }.
 fn Selenium::parse_cookie ($cookie) {

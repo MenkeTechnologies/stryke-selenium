@@ -252,6 +252,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::valid_locator_strategy($s)` | `→ { strategy, valid, canonical }` |
 | `Selenium::locator_to_w3c($strategy, $value?)` | `→ { using, value, strategy }` — the W3C WebDriver protocol pair; id/name/class collapse to a `css selector` |
 | `Selenium::key_code($key)` | `→ { key, code_point, codepoint, char }` — WebDriver special-key PUA code point (`Enter`→U+E007, `F1`–`F12`, aliases) |
+| `Selenium::key_name(%opts)` | `→ { key, code_point, codepoint, char }` — PUA code point (`codepoint`/`char`) → canonical key name; inverse of `key_code` |
 | `Selenium::parse_cookie("a=b; Path=/; Secure")` | `→ { name, value, domain, path, secure, http_only, same_site, expires }` — feeds `add_cookie` |
 | `Selenium::build_cookie(%opts)` | `→ Set-Cookie string` — inverse of `parse_cookie`; truthy `secure`/`http_only` become bare flags |
 

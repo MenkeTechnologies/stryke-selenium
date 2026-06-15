@@ -763,6 +763,76 @@ fn op_key_code(v: Value) -> Result<Value> {
     }))
 }
 
+/// Resolve a WebDriver PUA code point back to its canonical key name — the
+/// inverse of `key_code`. Accepts a `codepoint` integer or a single-character
+/// `char` (the PUA character `send_keys` inserts). Returns the primary name
+/// (`return` and `enter` stay distinct; aliases like `esc`/`ctrl` collapse to
+/// `escape`/`control`). opts: `codepoint` or `char`. Returns `{codepoint,
+/// code_point, key, char}`. Errors if the code point isn't an assigned
+/// WebDriver key. Pure.
+fn op_key_name(v: Value) -> Result<Value> {
+    let cp: u32 = if let Some(n) = v.get("codepoint").and_then(Value::as_u64) {
+        n as u32
+    } else if let Some(s) = v.get("char").and_then(Value::as_str) {
+        let mut chars = s.chars();
+        let c = chars.next().ok_or_else(|| anyhow::anyhow!("empty char"))?;
+        if chars.next().is_some() {
+            return Err(anyhow::anyhow!("char must be a single character"));
+        }
+        c as u32
+    } else {
+        return Err(anyhow::anyhow!("missing codepoint or char"));
+    };
+    let name = match cp {
+        0xE000 => "null",
+        0xE001 => "cancel",
+        0xE002 => "help",
+        0xE003 => "backspace",
+        0xE004 => "tab",
+        0xE005 => "clear",
+        0xE006 => "return",
+        0xE007 => "enter",
+        0xE008 => "shift",
+        0xE009 => "control",
+        0xE00A => "alt",
+        0xE00B => "pause",
+        0xE00C => "escape",
+        0xE00D => "space",
+        0xE00E => "pageup",
+        0xE00F => "pagedown",
+        0xE010 => "end",
+        0xE011 => "home",
+        0xE012 => "left",
+        0xE013 => "up",
+        0xE014 => "right",
+        0xE015 => "down",
+        0xE016 => "insert",
+        0xE017 => "delete",
+        0xE031..=0xE03C => {
+            let n = cp - 0xE031 + 1;
+            let ch = char::from_u32(cp).expect("WebDriver PUA code point is a valid scalar");
+            return Ok(json!({
+                "codepoint": cp,
+                "code_point": format!("U+{cp:04X}"),
+                "key": format!("f{n}"),
+                "char": ch.to_string(),
+            }));
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "U+{cp:04X} is not an assigned WebDriver key"
+            ))
+        }
+    };
+    let ch = char::from_u32(cp).expect("WebDriver PUA code point is a valid scalar");
+    Ok(json!({
+        "codepoint": cp,
+        "code_point": format!("U+{cp:04X}"),
+        "key": name,
+        "char": ch.to_string(),
+    }))
+}
+
 /// Parse a `Set-Cookie`-style string `name=value; Domain=…; Path=/; Secure;
 /// HttpOnly; SameSite=Lax` into the structured cookie `add_cookie` wants. Pure.
 fn op_parse_cookie(v: Value) -> Result<Value> {
@@ -867,6 +937,11 @@ pub extern "C" fn selenium__locator_to_w3c(args: *const c_char) -> *const c_char
 #[no_mangle]
 pub extern "C" fn selenium__key_code(args: *const c_char) -> *const c_char {
     ffi_call(args, op_key_code)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__key_name(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_key_name)
 }
 
 #[no_mangle]
@@ -1108,6 +1183,58 @@ mod tests {
         assert!(op_key_code(json!({"key": "F13"})).is_err());
         assert!(op_key_code(json!({"key": "nope"})).is_err());
         assert!(op_key_code(json!({})).is_err());
+    }
+
+    #[test]
+    fn key_name_inverts_key_code() {
+        // Primary name for a code point.
+        let enter = op_key_name(json!({"codepoint": 0xE007})).unwrap();
+        assert_eq!(enter["key"], json!("enter"));
+        assert_eq!(enter["code_point"], json!("U+E007"));
+        // return (E006) is distinct from enter (E007).
+        assert_eq!(
+            op_key_name(json!({"codepoint": 0xE006})).unwrap()["key"],
+            json!("return")
+        );
+        // Aliases collapse to the primary name.
+        assert_eq!(
+            op_key_name(json!({"codepoint": 0xE00C})).unwrap()["key"],
+            json!("escape")
+        );
+        assert_eq!(
+            op_key_name(json!({"codepoint": 0xE009})).unwrap()["key"],
+            json!("control")
+        );
+        // Function keys.
+        assert_eq!(
+            op_key_name(json!({"codepoint": 0xE031})).unwrap()["key"],
+            json!("f1")
+        );
+        assert_eq!(
+            op_key_name(json!({"codepoint": 0xE03C})).unwrap()["key"],
+            json!("f12")
+        );
+        // Accepts the PUA char directly.
+        assert_eq!(
+            op_key_name(json!({"char": "\u{E013}"})).unwrap()["key"],
+            json!("up")
+        );
+        // Round-trips key_code for every primary name.
+        for name in [
+            "null", "tab", "return", "enter", "escape", "space", "home", "end", "left", "up",
+            "right", "down", "insert", "delete", "f1", "f12",
+        ] {
+            let cp = op_key_code(json!({ "key": name })).unwrap()["codepoint"].clone();
+            assert_eq!(
+                op_key_name(json!({ "codepoint": cp })).unwrap()["key"],
+                json!(name),
+                "round-trip {name}"
+            );
+        }
+        // Unassigned code point, multi-char, and missing args reject.
+        assert!(op_key_name(json!({"codepoint": 0xE020})).is_err());
+        assert!(op_key_name(json!({"char": "ab"})).is_err());
+        assert!(op_key_name(json!({})).is_err());
     }
 
     #[test]
