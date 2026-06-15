@@ -248,6 +248,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | Function | Notes |
 |----------|-------|
 | `Selenium::parse_locator("css=.btn")` | `→ { strategy, value }` — splits `strategy=value`, canonicalizes the strategy for `find` (bare value → css) |
+| `Selenium::build_locator($strategy, $value)` | `→ { locator, strategy }` — inverse of `parse_locator`; canonicalizes the strategy, rejects unknowns |
 | `Selenium::valid_locator_strategy($s)` | `→ { strategy, valid, canonical }` |
 | `Selenium::parse_cookie("a=b; Path=/; Secure")` | `→ { name, value, domain, path, secure, http_only, same_site, expires }` — feeds `add_cookie` |
 

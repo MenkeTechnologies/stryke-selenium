@@ -573,6 +573,14 @@ fn Selenium::parse_locator ($locator) {
     Selenium::_decode("parse_locator", selenium__parse_locator(to_json({ locator => $locator })))
 }
 
+## Build a "strategy=value" locator from parts — inverse of parse_locator. The
+## strategy is canonicalized (css_selector → css) and rejected if unknown.
+## Returns a hashref { locator, strategy }.
+fn Selenium::build_locator ($strategy, $value) {
+    Selenium::_decode("build_locator",
+        selenium__build_locator(to_json({ strategy => $strategy, value => $value })))
+}
+
 ## Validate a locator strategy name → { strategy, valid, canonical }.
 fn Selenium::valid_locator_strategy ($strategy) {
     Selenium::_decode("valid_locator_strategy",

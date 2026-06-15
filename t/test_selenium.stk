@@ -63,6 +63,12 @@ assert_eq Selenium::parse_locator("class_name=active")->{strategy}, "class", "pa
 val $xp = Selenium::parse_locator("xpath=//input[\@type='text']")
 assert_eq $xp->{value}, "//input[\@type='text']", "parse_locator: keeps embedded ="
 
+# build_locator: inverse of parse_locator, strategy canonicalized.
+assert_eq Selenium::build_locator("css", ".btn.primary")->{locator}, "css=.btn.primary", "build_locator: css"
+assert_eq Selenium::build_locator("class_name", "active")->{locator}, "class=active", "build_locator: alias canonicalized"
+assert_eq Selenium::build_locator("xpath", "//input[\@type='text']")->{locator}, "xpath=//input[\@type='text']", "build_locator: xpath with = round-trips"
+assert_dies fn { Selenium::build_locator("bogus", "x") }, "build_locator: rejects unknown strategy"
+
 val $vs = Selenium::valid_locator_strategy("TAG_NAME")
 assert_ok $vs->{valid},                "valid_locator_strategy: alias is valid"
 assert_eq $vs->{canonical}, "tag",     "valid_locator_strategy: canonical form"

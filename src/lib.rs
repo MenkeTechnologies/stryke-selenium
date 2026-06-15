@@ -639,6 +639,17 @@ fn op_parse_locator(v: Value) -> Result<Value> {
     Ok(json!({"strategy": strategy, "value": value}))
 }
 
+/// Build a `strategy=value` locator from parts — the inverse of `parse_locator`.
+/// The strategy is canonicalized (so `css_selector` → `css`) and rejected if
+/// unknown. opts: `strategy` (required), `value` (required). Pure.
+fn op_build_locator(v: Value) -> Result<Value> {
+    let strat_raw = arg_str(&v, "strategy")?;
+    let value = arg_str(&v, "value")?;
+    let strategy = canonical_strategy(strat_raw)
+        .ok_or_else(|| anyhow::anyhow!("unknown locator strategy '{strat_raw}'"))?;
+    Ok(json!({"locator": format!("{strategy}={value}"), "strategy": strategy}))
+}
+
 /// Validate a locator strategy name, returning its canonical form. Pure.
 fn op_valid_locator_strategy(v: Value) -> Result<Value> {
     let s = arg_str(&v, "strategy")?;
@@ -693,6 +704,11 @@ fn op_parse_cookie(v: Value) -> Result<Value> {
 #[no_mangle]
 pub extern "C" fn selenium__parse_locator(args: *const c_char) -> *const c_char {
     ffi_call(args, op_parse_locator)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__build_locator(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_build_locator)
 }
 
 #[no_mangle]
@@ -807,6 +823,30 @@ mod tests {
         let v = op_parse_locator(json!({"locator": "xpath=//input[@type='text']"})).unwrap();
         assert_eq!(v["strategy"], json!("xpath"));
         assert_eq!(v["value"], json!("//input[@type='text']"));
+    }
+
+    #[test]
+    fn build_locator_inverts_parse_locator() {
+        let b = op_build_locator(json!({"strategy": "css", "value": ".btn.primary"})).unwrap();
+        assert_eq!(b["locator"], json!("css=.btn.primary"));
+        let back = op_parse_locator(json!({"locator": b["locator"].as_str().unwrap()})).unwrap();
+        assert_eq!(back["strategy"], json!("css"));
+        assert_eq!(back["value"], json!(".btn.primary"));
+        // Strategy alias is canonicalized in the output.
+        assert_eq!(
+            op_build_locator(json!({"strategy": "class_name", "value": "active"})).unwrap()
+                ["locator"],
+            json!("class=active")
+        );
+        // An xpath value with `=` round-trips intact.
+        let xp = op_build_locator(json!({"strategy": "xpath", "value": "//input[@type='text']"}))
+            .unwrap();
+        assert_eq!(xp["locator"], json!("xpath=//input[@type='text']"));
+        assert_eq!(
+            op_parse_locator(json!({"locator": xp["locator"].as_str().unwrap()})).unwrap()["value"],
+            json!("//input[@type='text']")
+        );
+        assert!(op_build_locator(json!({"strategy": "bogus", "value": "x"})).is_err());
     }
 
     #[test]
