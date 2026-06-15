@@ -74,6 +74,18 @@ assert_ok $vs->{valid},                "valid_locator_strategy: alias is valid"
 assert_eq $vs->{canonical}, "tag",     "valid_locator_strategy: canonical form"
 assert_eq Selenium::valid_locator_strategy("nope")->{valid}, 0, "valid_locator_strategy: rejects unknown"
 
+# locator_to_w3c: the actual WebDriver { using, value } protocol pair.
+val $w = Selenium::locator_to_w3c("css", ".btn")
+assert_eq $w->{using}, "css selector", "locator_to_w3c: css → css selector"
+assert_eq $w->{value}, ".btn",         "locator_to_w3c: value verbatim"
+assert_eq Selenium::locator_to_w3c("xpath=//a")->{using}, "xpath", "locator_to_w3c: single-string locator"
+assert_eq Selenium::locator_to_w3c("tag_name=div")->{using}, "tag name", "locator_to_w3c: tag name"
+# id/name/class collapse to a css selector.
+assert_eq Selenium::locator_to_w3c("id", "main")->{value}, "[id=\"main\"]", "locator_to_w3c: id → [id=...]"
+assert_eq Selenium::locator_to_w3c("name", "q")->{value}, "[name=\"q\"]", "locator_to_w3c: name → [name=...]"
+assert_eq Selenium::locator_to_w3c("class", "active")->{value}, "[class~=\"active\"]", "locator_to_w3c: class → [class~=...]"
+assert_dies fn { Selenium::locator_to_w3c("bogus=x") }, "locator_to_w3c: rejects unknown strategy"
+
 val $ck = Selenium::parse_cookie("session=abc123; Domain=.example.com; Path=/; Secure; HttpOnly")
 assert_eq $ck->{name},   "session",       "parse_cookie: name"
 assert_eq $ck->{value},  "abc123",        "parse_cookie: value"

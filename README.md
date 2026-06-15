@@ -250,6 +250,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::parse_locator("css=.btn")` | `→ { strategy, value }` — splits `strategy=value`, canonicalizes the strategy for `find` (bare value → css) |
 | `Selenium::build_locator($strategy, $value)` | `→ { locator, strategy }` — inverse of `parse_locator`; canonicalizes the strategy, rejects unknowns |
 | `Selenium::valid_locator_strategy($s)` | `→ { strategy, valid, canonical }` |
+| `Selenium::locator_to_w3c($strategy, $value?)` | `→ { using, value, strategy }` — the W3C WebDriver protocol pair; id/name/class collapse to a `css selector` |
 | `Selenium::parse_cookie("a=b; Path=/; Secure")` | `→ { name, value, domain, path, secure, http_only, same_site, expires }` — feeds `add_cookie` |
 | `Selenium::build_cookie(%opts)` | `→ Set-Cookie string` — inverse of `parse_cookie`; truthy `secure`/`http_only` become bare flags |
 

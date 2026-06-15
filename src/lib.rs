@@ -657,6 +657,55 @@ fn op_valid_locator_strategy(v: Value) -> Result<Value> {
     Ok(json!({"strategy": s, "valid": canon.is_some(), "canonical": canon}))
 }
 
+/// Escape a value for use inside a double-quoted CSS string.
+fn css_escape_string(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Translate a locator to the W3C WebDriver `{using, value}` pair sent over the
+/// wire. The protocol defines only five strategies — `css selector`, `xpath`,
+/// `tag name`, `link text`, `partial link text` — so the non-native `id`,
+/// `name`, and `class` collapse to a `css selector` (`[id="…"]`, `[name="…"]`,
+/// `[class~="…"]`), exactly as Selenium clients do. Accepts a `strategy`+`value`
+/// pair or a single `locator` string (`id=main`). Returns `{using, value,
+/// strategy}`. Pure.
+fn op_locator_to_w3c(v: Value) -> Result<Value> {
+    let (strat_raw, value) = if let Ok(loc) = arg_str(&v, "locator") {
+        match loc.split_once('=') {
+            Some((s, val)) => (s.trim().to_string(), val.to_string()),
+            None => ("css".to_string(), loc.to_string()),
+        }
+    } else {
+        (
+            arg_str(&v, "strategy")?.to_string(),
+            arg_str(&v, "value")?.to_string(),
+        )
+    };
+    let strategy = canonical_strategy(&strat_raw)
+        .ok_or_else(|| anyhow::anyhow!("unknown locator strategy '{strat_raw}'"))?;
+    let (using, w3c_value) = match strategy {
+        "css" => ("css selector", value),
+        "xpath" => ("xpath", value),
+        "tag" => ("tag name", value),
+        "link_text" => ("link text", value),
+        "partial_link_text" => ("partial link text", value),
+        "id" => (
+            "css selector",
+            format!("[id=\"{}\"]", css_escape_string(&value)),
+        ),
+        "name" => (
+            "css selector",
+            format!("[name=\"{}\"]", css_escape_string(&value)),
+        ),
+        "class" => (
+            "css selector",
+            format!("[class~=\"{}\"]", css_escape_string(&value)),
+        ),
+        other => unreachable!("canonical_strategy yielded unexpected `{other}`"),
+    };
+    Ok(json!({"using": using, "value": w3c_value, "strategy": strategy}))
+}
+
 /// Parse a `Set-Cookie`-style string `name=value; Domain=…; Path=/; Secure;
 /// HttpOnly; SameSite=Lax` into the structured cookie `add_cookie` wants. Pure.
 fn op_parse_cookie(v: Value) -> Result<Value> {
@@ -751,6 +800,11 @@ pub extern "C" fn selenium__build_locator(args: *const c_char) -> *const c_char 
 #[no_mangle]
 pub extern "C" fn selenium__valid_locator_strategy(args: *const c_char) -> *const c_char {
     ffi_call(args, op_valid_locator_strategy)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__locator_to_w3c(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_locator_to_w3c)
 }
 
 #[no_mangle]
@@ -889,6 +943,49 @@ mod tests {
             json!("//input[@type='text']")
         );
         assert!(op_build_locator(json!({"strategy": "bogus", "value": "x"})).is_err());
+    }
+
+    #[test]
+    fn locator_to_w3c_maps_to_protocol_strategies() {
+        // The five native W3C strategies pass their value through verbatim.
+        let css = op_locator_to_w3c(json!({"strategy": "css", "value": ".btn"})).unwrap();
+        assert_eq!(css["using"], json!("css selector"));
+        assert_eq!(css["value"], json!(".btn"));
+        assert_eq!(
+            op_locator_to_w3c(json!({"locator": "xpath=//a"})).unwrap()["using"],
+            json!("xpath")
+        );
+        assert_eq!(
+            op_locator_to_w3c(json!({"locator": "tag_name=div"})).unwrap()["using"],
+            json!("tag name")
+        );
+        assert_eq!(
+            op_locator_to_w3c(json!({"locator": "link=Sign in"})).unwrap()["using"],
+            json!("link text")
+        );
+        // id / name / class are non-native — they collapse to a css selector.
+        let id = op_locator_to_w3c(json!({"locator": "id=main"})).unwrap();
+        assert_eq!(id["using"], json!("css selector"));
+        assert_eq!(id["value"], json!("[id=\"main\"]"));
+        assert_eq!(
+            op_locator_to_w3c(json!({"strategy": "name", "value": "q"})).unwrap()["value"],
+            json!("[name=\"q\"]")
+        );
+        assert_eq!(
+            op_locator_to_w3c(json!({"strategy": "class", "value": "active"})).unwrap()["value"],
+            json!("[class~=\"active\"]")
+        );
+        // A value containing a quote is CSS-string-escaped.
+        assert_eq!(
+            op_locator_to_w3c(json!({"strategy": "id", "value": "a\"b"})).unwrap()["value"],
+            json!("[id=\"a\\\"b\"]")
+        );
+        // A bare locator defaults to css; an unknown strategy errors.
+        assert_eq!(
+            op_locator_to_w3c(json!({"locator": "#main"})).unwrap()["using"],
+            json!("css selector")
+        );
+        assert!(op_locator_to_w3c(json!({"locator": "bogus=x"})).is_err());
     }
 
     #[test]

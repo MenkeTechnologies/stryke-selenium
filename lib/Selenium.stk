@@ -587,6 +587,15 @@ fn Selenium::valid_locator_strategy ($strategy) {
         selenium__valid_locator_strategy(to_json({ strategy => $strategy })))
 }
 
+## Translate a locator to the W3C WebDriver { using, value } pair sent on the
+## wire. Native strategies (css/xpath/tag/link/partial) pass through; id, name,
+## and class collapse to a "css selector" ([id="…"], [name="…"], [class~="…"]).
+## Pass $strategy + $value, or a single $strategy="value" locator string.
+fn Selenium::locator_to_w3c ($strategy, $value = undef) {
+    val $req = defined($value) ? { strategy => $strategy, value => $value } : { locator => $strategy }
+    Selenium::_decode("locator_to_w3c", selenium__locator_to_w3c(to_json($req)))
+}
+
 ## Parse a Set-Cookie-style string into the structured cookie add_cookie wants:
 ## { name, value, domain, path, secure, http_only, same_site, expires }.
 fn Selenium::parse_cookie ($cookie) {
