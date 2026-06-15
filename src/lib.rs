@@ -607,6 +607,104 @@ pub extern "C" fn selenium__delete_all_cookies(args: *const c_char) -> *const c_
     })
 }
 
+// ── pure helpers (no browser) ───────────────────────────────────────────
+
+/// Canonicalize a locator-strategy alias to the form `find`/`by_from` accept,
+/// or `None` if unknown.
+fn canonical_strategy(s: &str) -> Option<&'static str> {
+    match s.to_ascii_lowercase().as_str() {
+        "css" | "css_selector" => Some("css"),
+        "id" => Some("id"),
+        "name" => Some("name"),
+        "xpath" => Some("xpath"),
+        "tag" | "tag_name" => Some("tag"),
+        "class" | "class_name" => Some("class"),
+        "link_text" | "link" => Some("link_text"),
+        "partial_link_text" | "plink" | "partial" => Some("partial_link_text"),
+        _ => None,
+    }
+}
+
+/// Parse a `strategy=value` locator (`css=.btn`, `xpath=//a`, `id=main`) into
+/// `{strategy, value}`, canonicalizing the strategy so it feeds straight into
+/// `find`. A bare string with no `=` defaults to `css`. Pure.
+fn op_parse_locator(v: Value) -> Result<Value> {
+    let loc = arg_str(&v, "locator")?;
+    let (strat_raw, value) = match loc.split_once('=') {
+        Some((s, val)) => (s.trim(), val),
+        None => ("css", loc),
+    };
+    let strategy = canonical_strategy(strat_raw)
+        .ok_or_else(|| anyhow::anyhow!("unknown locator strategy '{strat_raw}'"))?;
+    Ok(json!({"strategy": strategy, "value": value}))
+}
+
+/// Validate a locator strategy name, returning its canonical form. Pure.
+fn op_valid_locator_strategy(v: Value) -> Result<Value> {
+    let s = arg_str(&v, "strategy")?;
+    let canon = canonical_strategy(s);
+    Ok(json!({"strategy": s, "valid": canon.is_some(), "canonical": canon}))
+}
+
+/// Parse a `Set-Cookie`-style string `name=value; Domain=…; Path=/; Secure;
+/// HttpOnly; SameSite=Lax` into the structured cookie `add_cookie` wants. Pure.
+fn op_parse_cookie(v: Value) -> Result<Value> {
+    let s = arg_str(&v, "cookie")?;
+    let mut parts = s.split(';').map(str::trim).filter(|x| !x.is_empty());
+    let first = parts
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("empty cookie"))?;
+    let (name, value) = first
+        .split_once('=')
+        .ok_or_else(|| anyhow::anyhow!("cookie missing name=value: {s}"))?;
+    let mut domain = Value::Null;
+    let mut path = Value::Null;
+    let mut secure = false;
+    let mut http_only = false;
+    let mut same_site = Value::Null;
+    let mut expires = Value::Null;
+    for attr in parts {
+        let (k, val) = match attr.split_once('=') {
+            Some((k, val)) => (k.trim().to_ascii_lowercase(), Some(val.trim())),
+            None => (attr.to_ascii_lowercase(), None),
+        };
+        match k.as_str() {
+            "domain" => domain = json!(val.unwrap_or("")),
+            "path" => path = json!(val.unwrap_or("")),
+            "secure" => secure = true,
+            "httponly" => http_only = true,
+            "samesite" => same_site = json!(val.unwrap_or("")),
+            "expires" | "max-age" => expires = json!(val.unwrap_or("")),
+            _ => {}
+        }
+    }
+    Ok(json!({
+        "name": name.trim(),
+        "value": value,
+        "domain": domain,
+        "path": path,
+        "secure": secure,
+        "http_only": http_only,
+        "same_site": same_site,
+        "expires": expires,
+    }))
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__parse_locator(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_parse_locator)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__valid_locator_strategy(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_valid_locator_strategy)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__parse_cookie(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_parse_cookie)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -678,5 +776,70 @@ mod tests {
         // Active may be null or a previously-set test value (state
         // leaks across cargo's threaded tests if the active-pointer
         // test runs first), so we don't assert on it here.
+    }
+
+    // ── pure helpers (no browser) ────────────────────────────────────────────
+
+    #[test]
+    fn parse_locator_splits_and_canonicalizes() {
+        let css = op_parse_locator(json!({"locator": "css=.btn.primary"})).unwrap();
+        assert_eq!(css["strategy"], json!("css"));
+        assert_eq!(css["value"], json!(".btn.primary"));
+        // Aliases collapse to the canonical strategy `find` accepts.
+        assert_eq!(
+            op_parse_locator(json!({"locator": "class_name=active"})).unwrap()["strategy"],
+            json!("class")
+        );
+        assert_eq!(
+            op_parse_locator(json!({"locator": "link=Sign in"})).unwrap()["strategy"],
+            json!("link_text")
+        );
+        // A bare value (no `=`) defaults to css.
+        let bare = op_parse_locator(json!({"locator": "#main"})).unwrap();
+        assert_eq!(bare["strategy"], json!("css"));
+        assert_eq!(bare["value"], json!("#main"));
+        assert!(op_parse_locator(json!({"locator": "bogus=x"})).is_err());
+    }
+
+    #[test]
+    fn parse_locator_value_keeps_embedded_equals() {
+        // An xpath with `=` must not be truncated at the first `=`.
+        let v = op_parse_locator(json!({"locator": "xpath=//input[@type='text']"})).unwrap();
+        assert_eq!(v["strategy"], json!("xpath"));
+        assert_eq!(v["value"], json!("//input[@type='text']"));
+    }
+
+    #[test]
+    fn valid_locator_strategy_reports_canonical() {
+        let v = op_valid_locator_strategy(json!({"strategy": "TAG_NAME"})).unwrap();
+        assert_eq!(v["valid"], json!(true));
+        assert_eq!(v["canonical"], json!("tag"));
+        let bad = op_valid_locator_strategy(json!({"strategy": "nope"})).unwrap();
+        assert_eq!(bad["valid"], json!(false));
+        assert_eq!(bad["canonical"], Value::Null);
+    }
+
+    #[test]
+    fn parse_cookie_extracts_attributes() {
+        let v = op_parse_cookie(json!({
+            "cookie": "session=abc123; Domain=.example.com; Path=/; Secure; HttpOnly; SameSite=Lax"
+        }))
+        .unwrap();
+        assert_eq!(v["name"], json!("session"));
+        assert_eq!(v["value"], json!("abc123"));
+        assert_eq!(v["domain"], json!(".example.com"));
+        assert_eq!(v["path"], json!("/"));
+        assert_eq!(v["secure"], json!(true));
+        assert_eq!(v["http_only"], json!(true));
+        assert_eq!(v["same_site"], json!("Lax"));
+    }
+
+    #[test]
+    fn parse_cookie_minimal_and_value_with_equals() {
+        let v = op_parse_cookie(json!({"cookie": "token=a=b=c"})).unwrap();
+        assert_eq!(v["name"], json!("token"));
+        assert_eq!(v["value"], json!("a=b=c"), "value keeps later = signs");
+        assert_eq!(v["secure"], json!(false));
+        assert!(op_parse_cookie(json!({"cookie": "noequalshere"})).is_err());
     }
 }

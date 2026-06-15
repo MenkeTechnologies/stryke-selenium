@@ -563,3 +563,24 @@ fn Selenium::print_page ($path, $sid = undef) {
     Selenium::_decode("print_page",
         selenium__print_page(to_json(Selenium::_with_session(%args, $sid))))->{path}
 }
+
+# ── pure helpers (no browser) ─────────────────────────────────────────
+
+## Parse a "strategy=value" locator ("css=.btn", "xpath=//a", "id=main") into a
+## hashref { strategy, value } with the strategy canonicalized for find(). A
+## bare value with no "=" defaults to css.
+fn Selenium::parse_locator ($locator) {
+    Selenium::_decode("parse_locator", selenium__parse_locator(to_json({ locator => $locator })))
+}
+
+## Validate a locator strategy name → { strategy, valid, canonical }.
+fn Selenium::valid_locator_strategy ($strategy) {
+    Selenium::_decode("valid_locator_strategy",
+        selenium__valid_locator_strategy(to_json({ strategy => $strategy })))
+}
+
+## Parse a Set-Cookie-style string into the structured cookie add_cookie wants:
+## { name, value, domain, path, secure, http_only, same_site, expires }.
+fn Selenium::parse_cookie ($cookie) {
+    Selenium::_decode("parse_cookie", selenium__parse_cookie(to_json({ cookie => $cookie })))
+}

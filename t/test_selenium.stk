@@ -54,4 +54,25 @@ assert_ok !defined($current), "active() is undef when no session is open"
 val $closed = Selenium::quit_all()
 assert_eq $closed, 0, "quit_all closes 0 sessions when none are open"
 
+# ── pure helpers (no browser — always run) ───────────────────────────
+val $css = Selenium::parse_locator("css=.btn.primary")
+assert_eq $css->{strategy}, "css",         "parse_locator: css strategy"
+assert_eq $css->{value},    ".btn.primary", "parse_locator: css value"
+assert_eq Selenium::parse_locator("class_name=active")->{strategy}, "class", "parse_locator: alias canonicalized"
+# embedded = in an xpath must survive
+val $xp = Selenium::parse_locator("xpath=//input[\@type='text']")
+assert_eq $xp->{value}, "//input[\@type='text']", "parse_locator: keeps embedded ="
+
+val $vs = Selenium::valid_locator_strategy("TAG_NAME")
+assert_ok $vs->{valid},                "valid_locator_strategy: alias is valid"
+assert_eq $vs->{canonical}, "tag",     "valid_locator_strategy: canonical form"
+assert_eq Selenium::valid_locator_strategy("nope")->{valid}, 0, "valid_locator_strategy: rejects unknown"
+
+val $ck = Selenium::parse_cookie("session=abc123; Domain=.example.com; Path=/; Secure; HttpOnly")
+assert_eq $ck->{name},   "session",       "parse_cookie: name"
+assert_eq $ck->{value},  "abc123",        "parse_cookie: value"
+assert_eq $ck->{domain}, ".example.com",  "parse_cookie: domain"
+assert_eq $ck->{secure}, 1,               "parse_cookie: secure flag"
+assert_eq $ck->{http_only}, 1,            "parse_cookie: http_only flag"
+
 test_run

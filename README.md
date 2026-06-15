@@ -241,6 +241,16 @@ by `Selenium::open`. Omit it to use the active session.
 | `Selenium::delete_cookie($name, $sid?)` | |
 | `Selenium::delete_all_cookies($sid?)` | |
 
+### Pure helpers (no browser)
+
+These open no session — string parsing/validation that runs without a WebDriver:
+
+| Function | Notes |
+|----------|-------|
+| `Selenium::parse_locator("css=.btn")` | `→ { strategy, value }` — splits `strategy=value`, canonicalizes the strategy for `find` (bare value → css) |
+| `Selenium::valid_locator_strategy($s)` | `→ { strategy, valid, canonical }` |
+| `Selenium::parse_cookie("a=b; Path=/; Secure")` | `→ { name, value, domain, path, secure, http_only, same_site, expires }` — feeds `add_cookie` |
+
 ## [0x04] Launching a WebDriver server
 
 `stryke-selenium` is a client. You launch the WebDriver server yourself.
