@@ -149,6 +149,14 @@ assert_eq Selenium::build_css_selector(tag => "p", class => "lead"), "p.lead", "
 assert_eq Selenium::build_css_selector(id => "user 42"), "#user\\ 42", "build_css_selector: id is CSS-escaped"
 assert_dies fn { Selenium::build_css_selector() }, "build_css_selector: needs at least one part"
 
+# build_xpath: the XPath counterpart of build_css_selector.
+assert_eq Selenium::build_xpath(tag => "button", text => "Log in"), "//button[text()='Log in']", "build_xpath: tag + exact text"
+assert_eq Selenium::build_xpath(id => "main"), "//*[\@id='main']", "build_xpath: default * tag with an id predicate"
+assert_eq Selenium::build_xpath(class => "active"), "//*[contains(concat(' ', normalize-space(\@class), ' '), ' active ')]", "build_xpath: single-class contains idiom"
+assert_eq Selenium::build_xpath(tag => "a", contains_text => "more"), "//a[contains(text(), 'more')]", "build_xpath: substring text"
+assert_eq Selenium::build_xpath(text => "it's"), "//*[text()=\"it's\"]", "build_xpath: value with a quote is XPath-quoted"
+assert_dies fn { Selenium::build_xpath() }, "build_xpath: needs at least one part"
+
 # xpath_literal: quote an arbitrary string as an XPath 1.0 string literal.
 assert_eq Selenium::xpath_literal("Log in"),  q{'Log in'},          "xpath_literal: no quotes → single-quoted"
 assert_eq Selenium::xpath_literal(q{it's}),   q{"it's"},            "xpath_literal: has ' → double-quoted"

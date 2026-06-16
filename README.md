@@ -260,6 +260,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::css_unescape($escaped)` | `→ decoded string` — inverse of `css_escape` (CSS Syntax §4.3.7); decodes `\HH ` hex + `\c` escapes back to the raw id/class |
 | `Selenium::css_escape_string($value)` | `→ quoted string` — escape + double-quote a CSS attribute-selector value (`[attr="…"]`); the string-context companion of `css_escape` |
 | `Selenium::build_css_selector(%parts)` | `→ selector string` — compose `tag`/`id`/`classes`/`attributes` into a CSS selector (id/class CSS-escaped, attr values `"`/`\`-escaped) |
+| `Selenium::build_xpath(%parts)` | `→ xpath string` — XPath counterpart: compose `tag`/`id`/`classes`/`attributes`/`text`/`contains_text` into a `//` locator (values XPath-quoted; classes use the contains-concat idiom) |
 | `Selenium::xpath_literal($value)` | `→ literal string` — quote an arbitrary string as an XPath 1.0 literal for text/attribute locators; uses `concat()` when it contains both `'` and `"` |
 
 ## [0x04] Launching a WebDriver server

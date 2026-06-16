@@ -1057,9 +1057,11 @@ fn op_css_unescape(v: Value) -> Result<Value> {
 /// string containing BOTH kinds is split into a `concat('a', "'", 'b', …)`
 /// expression (the only portable way to embed both). opts: `value`. Returns
 /// `{value, literal}`. Pure.
-fn op_xpath_literal(v: Value) -> Result<Value> {
-    let s = arg_str(&v, "value")?;
-    let literal = if !s.contains('\'') {
+/// Quote a string as an XPath 1.0 literal — single-quoted when it has no `'`,
+/// double-quoted when it has no `"`, else a `concat(...)` since XPath 1.0 has no
+/// escape syntax. Shared by `xpath_literal` and `build_xpath`.
+fn xpath_literal_str(s: &str) -> String {
+    if !s.contains('\'') {
         format!("'{s}'")
     } else if !s.contains('"') {
         format!("\"{s}\"")
@@ -1068,8 +1070,89 @@ fn op_xpath_literal(v: Value) -> Result<Value> {
         // re-join with the literal single quote `"'"` inside a concat().
         let parts: Vec<String> = s.split('\'').map(|p| format!("'{p}'")).collect();
         format!("concat({})", parts.join(", \"'\", "))
+    }
+}
+
+fn op_xpath_literal(v: Value) -> Result<Value> {
+    let s = arg_str(&v, "value")?;
+    Ok(json!({ "value": s, "literal": xpath_literal_str(s) }))
+}
+
+/// Build an XPath locator from structured parts — the XPath counterpart of
+/// `build_css_selector`. opts: `tag` (optional element name, default `*`), `id`
+/// (→ `[@id=<literal>]`), `classes` (array, or a single `class` string; each →
+/// the standard `contains(concat(' ', normalize-space(@class), ' '), ' <cls> ')`
+/// single-class idiom), `attributes`/`attrs` (object `{name: value}` → `[@name=
+/// <literal>]`), `text` (→ `[text()=<literal>]`), and `contains_text` (→
+/// `[contains(text(), <literal>)]`). Values are XPath-quoted via the same logic
+/// as `xpath_literal`. The path is descendant-or-self (`//`); at least one of
+/// tag/id/classes/attributes/text is required (a lone `//*` is rejected).
+/// Returns `{xpath}`. Pure.
+fn op_build_xpath(v: Value) -> Result<Value> {
+    let tag = v
+        .get("tag")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("*");
+    let mut preds = String::new();
+    let mut have_part = tag != "*";
+    if let Some(id) = v
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        preds.push_str(&format!("[@id={}]", xpath_literal_str(id)));
+        have_part = true;
+    }
+    let push_class = |name: &str, preds: &mut String, have: &mut bool| {
+        if !name.is_empty() {
+            let needle = xpath_literal_str(&format!(" {name} "));
+            preds.push_str(&format!(
+                "[contains(concat(' ', normalize-space(@class), ' '), {needle})]"
+            ));
+            *have = true;
+        }
     };
-    Ok(json!({ "value": s, "literal": literal }))
+    if let Some(classes) = v.get("classes").and_then(Value::as_array) {
+        for c in classes {
+            let name = c
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("each class must be a string"))?;
+            push_class(name, &mut preds, &mut have_part);
+        }
+    }
+    if let Some(class) = v
+        .get("class")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        push_class(class, &mut preds, &mut have_part);
+    }
+    if let Some(attrs) = v
+        .get("attributes")
+        .or_else(|| v.get("attrs"))
+        .and_then(Value::as_object)
+    {
+        for (k, val) in attrs {
+            let s = val.as_str().unwrap_or("");
+            preds.push_str(&format!("[@{k}={}]", xpath_literal_str(s)));
+            have_part = true;
+        }
+    }
+    if let Some(text) = v.get("text").and_then(Value::as_str) {
+        preds.push_str(&format!("[text()={}]", xpath_literal_str(text)));
+        have_part = true;
+    }
+    if let Some(ct) = v.get("contains_text").and_then(Value::as_str) {
+        preds.push_str(&format!("[contains(text(), {})]", xpath_literal_str(ct)));
+        have_part = true;
+    }
+    if !have_part {
+        return Err(anyhow::anyhow!(
+            "build_xpath needs at least one of tag/id/classes/attributes/text"
+        ));
+    }
+    Ok(json!({ "xpath": format!("//{tag}{preds}") }))
 }
 
 /// Build a CSS selector from structured parts — a typed alternative to
@@ -1202,6 +1285,11 @@ pub extern "C" fn selenium__xpath_literal(args: *const c_char) -> *const c_char 
 #[no_mangle]
 pub extern "C" fn selenium__build_css_selector(args: *const c_char) -> *const c_char {
     ffi_call(args, op_build_css_selector)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__build_xpath(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_build_xpath)
 }
 
 #[cfg(test)]
@@ -1747,5 +1835,48 @@ mod tests {
         // empty final piece.
         assert_eq!(lit("a\"b'"), "concat('a\"b', \"'\", '')");
         assert!(op_xpath_literal(json!({})).is_err());
+    }
+
+    #[test]
+    fn build_xpath_composes_predicates_in_order() {
+        let xp = |v: Value| {
+            op_build_xpath(v).unwrap()["xpath"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        // tag → id → classes → attributes → text, in that order.
+        assert_eq!(
+            xp(json!({
+                "tag": "input", "id": "email", "classes": ["lg"],
+                "attributes": {"type": "email"}
+            })),
+            "//input[@id='email'][contains(concat(' ', normalize-space(@class), ' '), ' lg ')][@type='email']"
+        );
+        // Tag alone; default tag `*` when only a predicate is given.
+        assert_eq!(xp(json!({"tag": "div"})), "//div");
+        assert_eq!(xp(json!({"id": "main"})), "//*[@id='main']");
+        // A single class string and the contains-concat idiom.
+        assert_eq!(
+            xp(json!({"class": "active"})),
+            "//*[contains(concat(' ', normalize-space(@class), ' '), ' active ')]"
+        );
+        // Exact and substring text predicates.
+        assert_eq!(
+            xp(json!({"tag": "button", "text": "Log in"})),
+            "//button[text()='Log in']"
+        );
+        assert_eq!(
+            xp(json!({"tag": "a", "contains_text": "more"})),
+            "//a[contains(text(), 'more')]"
+        );
+        // Values with a quote are XPath-quoted via the shared literal logic.
+        assert_eq!(xp(json!({"text": "it's"})), "//*[text()=\"it's\"]");
+        // attrs alias.
+        assert_eq!(xp(json!({"attrs": {"href": "/x"}})), "//*[@href='/x']");
+        // A lone `//*` (no tag, no predicate) is rejected.
+        assert!(op_build_xpath(json!({})).is_err());
+        assert!(op_build_xpath(json!({"tag": "*"})).is_err());
+        assert!(op_build_xpath(json!({"tag": "", "id": ""})).is_err());
     }
 }

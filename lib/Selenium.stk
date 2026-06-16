@@ -675,3 +675,13 @@ fn Selenium::xpath_literal ($value) {
 fn Selenium::build_css_selector (%parts) {
     Selenium::_decode("build_css_selector", selenium__build_css_selector(to_json(\%parts)))->{selector}
 }
+
+## Build an XPath locator from %parts (the XPath counterpart of
+## build_css_selector): tag (default *), id ([@id=…]), classes (arrayref or a
+## single class string, each the contains(concat(' ',normalize-space(@class),' '),
+## ' cls ') single-class idiom), attributes/attrs (hashref → [@name=…]), text
+## ([text()=…]) and contains_text ([contains(text(),…)]). Values are XPath-quoted.
+## Descendant-or-self (//); needs at least one part. Returns the XPath string.
+fn Selenium::build_xpath (%parts) {
+    Selenium::_decode("build_xpath", selenium__build_xpath(to_json(\%parts)))->{xpath}
+}
