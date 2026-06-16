@@ -135,4 +135,14 @@ assert_eq Selenium::build_css_selector(classes => ["a", "b"]), ".a.b", "build_cs
 assert_eq Selenium::build_css_selector(tag => "p", class => "lead"), "p.lead", "build_css_selector: single class string"
 assert_eq Selenium::build_css_selector(id => "user 42"), "#user\\ 42", "build_css_selector: id is CSS-escaped"
 assert_dies fn { Selenium::build_css_selector() }, "build_css_selector: needs at least one part"
+
+# xpath_literal: quote an arbitrary string as an XPath 1.0 string literal.
+assert_eq Selenium::xpath_literal("Log in"),  q{'Log in'},          "xpath_literal: no quotes → single-quoted"
+assert_eq Selenium::xpath_literal(q{it's}),   q{"it's"},            "xpath_literal: has ' → double-quoted"
+assert_eq Selenium::xpath_literal(q{say "hi"}), q{'say "hi"'},      "xpath_literal: has \" → single-quoted"
+assert_eq Selenium::xpath_literal(q{it's "x"}), q{concat('it', "'", 's "x"')}, "xpath_literal: both quotes → concat()"
+assert_eq Selenium::xpath_literal(q{'}),      q{"'"},               "xpath_literal: lone ' uses double quotes"
+# Builds a real text locator.
+assert_eq "//button[text()=" . Selenium::xpath_literal(q{it's "go"}) . "]", q{//button[text()=concat('it', "'", 's "go"')]}, "xpath_literal: composes a text() locator"
+
 test_run

@@ -986,6 +986,28 @@ fn op_css_escape(v: Value) -> Result<Value> {
     Ok(json!({ "escaped": css_escape_ident(arg_str(&v, "value")?) }))
 }
 
+/// Quote an arbitrary string as an XPath 1.0 string literal — the XPath analog
+/// of `css_escape`, for text/attribute locators like `//button[text()=…]` with
+/// user-supplied values. XPath 1.0 has no escape character, so a string with no
+/// single quote becomes `'…'`, one with no double quote becomes `"…"`, and a
+/// string containing BOTH kinds is split into a `concat('a', "'", 'b', …)`
+/// expression (the only portable way to embed both). opts: `value`. Returns
+/// `{value, literal}`. Pure.
+fn op_xpath_literal(v: Value) -> Result<Value> {
+    let s = arg_str(&v, "value")?;
+    let literal = if !s.contains('\'') {
+        format!("'{s}'")
+    } else if !s.contains('"') {
+        format!("\"{s}\"")
+    } else {
+        // Both quote kinds present: split on `'`, single-quote each piece, and
+        // re-join with the literal single quote `"'"` inside a concat().
+        let parts: Vec<String> = s.split('\'').map(|p| format!("'{p}'")).collect();
+        format!("concat({})", parts.join(", \"'\", "))
+    };
+    Ok(json!({ "value": s, "literal": literal }))
+}
+
 /// Build a CSS selector from structured parts — a typed alternative to
 /// hand-concatenating one. opts: `tag` (optional element name, emitted as-is),
 /// `id` (optional → `#` + CSS-escaped identifier), `classes` (optional array, or
@@ -1096,6 +1118,11 @@ pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn selenium__css_escape(args: *const c_char) -> *const c_char {
     ffi_call(args, op_css_escape)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__xpath_literal(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_xpath_literal)
 }
 
 #[no_mangle]
@@ -1550,5 +1577,30 @@ mod tests {
         assert_eq!(sel(json!({"tag": "div", "id": "", "classes": []})), "div");
         assert!(op_build_css_selector(json!({})).is_err());
         assert!(op_build_css_selector(json!({"id": "", "tag": ""})).is_err());
+    }
+
+    #[test]
+    fn xpath_literal_quotes_arbitrary_strings() {
+        let lit = |s: &str| {
+            op_xpath_literal(json!({ "value": s })).unwrap()["literal"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        // No quotes → single-quoted.
+        assert_eq!(lit("Log in"), "'Log in'");
+        assert_eq!(lit(""), "''");
+        // Contains a single quote but no double quote → double-quoted.
+        assert_eq!(lit("it's"), "\"it's\"");
+        // Contains a double quote but no single quote → single-quoted.
+        assert_eq!(lit("say \"hi\""), "'say \"hi\"'");
+        // Contains BOTH → concat() with the literal single quote as a separator.
+        assert_eq!(lit("it's \"x\""), "concat('it', \"'\", 's \"x\"')");
+        // A lone single quote uses the double-quote branch (no concat needed).
+        assert_eq!(lit("'"), "\"'\"");
+        // A trailing single quote alongside a double quote needs concat with an
+        // empty final piece.
+        assert_eq!(lit("a\"b'"), "concat('a\"b', \"'\", '')");
+        assert!(op_xpath_literal(json!({})).is_err());
     }
 }

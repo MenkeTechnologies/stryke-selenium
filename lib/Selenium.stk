@@ -640,6 +640,14 @@ fn Selenium::css_escape ($value) {
     Selenium::_decode("css_escape", selenium__css_escape(to_json({ value => $value })))->{escaped}
 }
 
+## Quote a string as an XPath 1.0 string literal (the XPath analog of css_escape)
+## for text/attribute locators: "//button[text()=" . Selenium::xpath_literal($t) . "]".
+## No-quote → '..', no-double-quote → "..", both → concat('a', "'", 'b', ...).
+## Returns the literal string.
+fn Selenium::xpath_literal ($value) {
+    Selenium::_decode("xpath_literal", selenium__xpath_literal(to_json({ value => $value })))->{literal}
+}
+
 ## Build a CSS selector from %parts: tag, id (# + CSS-escaped), classes (arrayref
 ## or a single class string, each . + CSS-escaped), and attributes/attrs (hashref
 ## { name => value }, each [name="value"] with the value escaped). Concatenated
