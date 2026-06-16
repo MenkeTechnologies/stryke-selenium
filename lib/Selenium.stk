@@ -642,6 +642,17 @@ fn Selenium::cookie_domain_matches ($cookie_domain, $host) {
         selenium__cookie_domain_matches(to_json({ cookie_domain => $cookie_domain, host => $host })))
 }
 
+## Whether a $request_path path-matches a cookie's Path ($cookie_path) per RFC
+## 6265 §5.1.4 — the path-scoping companion of cookie_domain_matches. Matches when
+## the paths are identical, when the cookie-path is a prefix of the request-path
+## and ends with "/", or when the cookie-path is a prefix and the first
+## request-path character past it is "/". Paths are compared verbatim
+## (case-sensitive). Returns a hashref { cookie_path, request_path, matches }.
+fn Selenium::cookie_path_matches ($cookie_path, $request_path) {
+    Selenium::_decode("cookie_path_matches",
+        selenium__cookie_path_matches(to_json({ cookie_path => $cookie_path, request_path => $request_path })))
+}
+
 ## Escape a string as a CSS identifier (the CSSOM "serialize an identifier"
 ## algorithm, a.k.a. browser CSS.escape) so an arbitrary id/class value can be
 ## embedded in a CSS-strategy locator: "#" . Selenium::css_escape($id). Returns

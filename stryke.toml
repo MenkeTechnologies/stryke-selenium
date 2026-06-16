@@ -1,6 +1,6 @@
 [package]
 name = "stryke-selenium"
-version = "0.15.0"
+version = "0.16.0"
 description = "Selenium WebDriver automation (browser launch, navigation, find/click/send_keys, JS, screenshot, cookies, windows, frames) for stryke. cdylib package — loaded in-process via dlopen on first `use Selenium`. A process-global tokio runtime bridges thirtyfour's async API to the sync FFI; WebDriver sessions and WebElement handles persist across calls."
 authors = ["MenkeTechnologies"]
 license = "MIT"
@@ -79,6 +79,7 @@ exports = [
     "selenium__parse_cookie",
     "selenium__build_cookie",
     "selenium__cookie_domain_matches",
+    "selenium__cookie_path_matches",
     "selenium__css_escape",
     "selenium__css_escape_string",
     "selenium__css_unescape",

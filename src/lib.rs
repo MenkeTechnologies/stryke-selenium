@@ -981,6 +981,33 @@ fn op_cookie_domain_matches(v: Value) -> Result<Value> {
     Ok(json!({ "cookie_domain": cookie_domain, "host": host, "matches": matches }))
 }
 
+/// Whether a `request_path` path-matches a cookie's `cookie_path` per RFC 6265
+/// §5.1.4 — the path-scoping companion of `cookie_domain_matches`. A request-path
+/// path-matches the cookie-path when (1) they are identical, (2) the cookie-path
+/// is a prefix of the request-path and ends with `/`, or (3) the cookie-path is a
+/// prefix and the first request-path character past the cookie-path is `/`. Paths
+/// are compared verbatim (case-sensitive, no normalization). opts: `cookie_path`
+/// (or `path`), `request_path` (or `uri_path`). Returns `{cookie_path,
+/// request_path, matches}`. Pure.
+fn op_cookie_path_matches(v: Value) -> Result<Value> {
+    let cookie_path = arg_str(&v, "cookie_path")
+        .or_else(|_| arg_str(&v, "path"))?
+        .to_string();
+    let request_path = arg_str(&v, "request_path")
+        .or_else(|_| arg_str(&v, "uri_path"))?
+        .to_string();
+    let cp = cookie_path.as_bytes();
+    let rp = request_path.as_bytes();
+    let matches = if cookie_path == request_path {
+        true
+    } else if rp.starts_with(cp) {
+        cp.last() == Some(&b'/') || rp.get(cp.len()) == Some(&b'/')
+    } else {
+        false
+    };
+    Ok(json!({ "cookie_path": cookie_path, "request_path": request_path, "matches": matches }))
+}
+
 /// Escape a string for safe use as a CSS identifier — a faithful port of the
 /// CSSOM "serialize an identifier" algorithm (what browsers expose as
 /// `CSS.escape()`). Lets a CSS-strategy locator embed an arbitrary id/class
@@ -1300,6 +1327,11 @@ pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn selenium__cookie_domain_matches(args: *const c_char) -> *const c_char {
     ffi_call(args, op_cookie_domain_matches)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__cookie_path_matches(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_cookie_path_matches)
 }
 
 #[no_mangle]
@@ -1747,6 +1779,37 @@ mod tests {
         assert_eq!(m("", "example.com"), json!(false));
         assert!(op_cookie_domain_matches(json!({"host": "x.com"})).is_err());
         assert!(op_cookie_domain_matches(json!({})).is_err());
+    }
+
+    #[test]
+    fn cookie_path_matches_follows_rfc6265_5_1_4() {
+        let m = |cp: &str, rp: &str| {
+            op_cookie_path_matches(json!({ "cookie_path": cp, "request_path": rp })).unwrap()
+                ["matches"]
+                .clone()
+        };
+        // (1) Identical paths match.
+        assert_eq!(m("/docs", "/docs"), json!(true));
+        // (2) Cookie-path is a prefix and ends with `/`.
+        assert_eq!(m("/docs/", "/docs/guide"), json!(true));
+        assert_eq!(m("/", "/anything/here"), json!(true));
+        // (3) Cookie-path is a prefix and the next request-path char is `/`.
+        assert_eq!(m("/docs", "/docs/guide"), json!(true));
+        // A prefix that is NOT at a `/` boundary does not match.
+        assert_eq!(m("/doc", "/docs"), json!(false));
+        assert_eq!(m("/docs", "/docsxyz"), json!(false));
+        // A request-path that is shorter / disjoint does not match.
+        assert_eq!(m("/docs/guide", "/docs"), json!(false));
+        assert_eq!(m("/admin", "/docs"), json!(false));
+        // Paths are case-sensitive (unlike domains).
+        assert_eq!(m("/Docs", "/docs/guide"), json!(false));
+        // `path`/`uri_path` aliases; missing args error.
+        assert_eq!(
+            op_cookie_path_matches(json!({"path": "/", "uri_path": "/x"})).unwrap()["matches"],
+            json!(true)
+        );
+        assert!(op_cookie_path_matches(json!({"cookie_path": "/x"})).is_err());
+        assert!(op_cookie_path_matches(json!({})).is_err());
     }
 
     #[test]
