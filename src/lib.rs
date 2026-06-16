@@ -986,6 +986,59 @@ fn op_css_escape(v: Value) -> Result<Value> {
     Ok(json!({ "escaped": css_escape_ident(arg_str(&v, "value")?) }))
 }
 
+/// Decode a CSS identifier's escapes back to the raw string — the inverse of
+/// `css_escape`. A faithful port of CSS Syntax §4.3.7 "consume an escaped code
+/// point": `\` + 1-6 hex digits (with one optional trailing whitespace consumed)
+/// → that code point, mapped to U+FFFD when it is zero, a surrogate, or above
+/// U+10FFFF; `\` + any other character → that character literally; a lone
+/// trailing `\` → U+FFFD (parse error). Round-trips `css_escape` for any input.
+/// opts: `escaped` (or `value`, required). Returns `{escaped, value}`. Pure.
+fn op_css_unescape(v: Value) -> Result<Value> {
+    let input = v
+        .get("escaped")
+        .or_else(|| v.get("value"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("missing escaped"))?;
+    let mut out = String::with_capacity(input.len());
+    let mut it = input.chars().peekable();
+    while let Some(c) = it.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match it.peek() {
+            // Trailing lone backslash: parse error → replacement character.
+            None => out.push('\u{FFFD}'),
+            Some(&h) if h.is_ascii_hexdigit() => {
+                let mut hex = String::new();
+                while hex.len() < 6 {
+                    match it.peek() {
+                        Some(&d) if d.is_ascii_hexdigit() => {
+                            hex.push(d);
+                            it.next();
+                        }
+                        _ => break,
+                    }
+                }
+                // One optional whitespace after the hex run is consumed.
+                if matches!(it.peek(), Some('\u{9}' | '\u{a}' | '\u{c}' | '\u{d}' | ' ')) {
+                    it.next();
+                }
+                let cp = u32::from_str_radix(&hex, 16).unwrap_or(0);
+                let ch = if cp == 0 || (0xD800..=0xDFFF).contains(&cp) {
+                    '\u{FFFD}'
+                } else {
+                    char::from_u32(cp).unwrap_or('\u{FFFD}')
+                };
+                out.push(ch);
+            }
+            // Any other character: drop the backslash, keep the character.
+            Some(_) => out.push(it.next().unwrap()),
+        }
+    }
+    Ok(json!({ "escaped": input, "value": out }))
+}
+
 /// Quote an arbitrary string as an XPath 1.0 string literal — the XPath analog
 /// of `css_escape`, for text/attribute locators like `//button[text()=…]` with
 /// user-supplied values. XPath 1.0 has no escape character, so a string with no
@@ -1118,6 +1171,11 @@ pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn selenium__css_escape(args: *const c_char) -> *const c_char {
     ffi_call(args, op_css_escape)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__css_unescape(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_css_unescape)
 }
 
 #[no_mangle]
@@ -1538,6 +1596,57 @@ mod tests {
         // Building a real id selector with css_escape is safe to feed a query.
         assert_eq!(format!("#{}", esc("user 42")), "#user\\ 42");
         assert!(op_css_escape(json!({})).is_err());
+    }
+
+    #[test]
+    fn css_unescape_inverts_css_escape() {
+        let unesc = |s: &str| {
+            op_css_unescape(json!({ "escaped": s })).unwrap()["value"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        // Hex escape with the trailing whitespace consumed.
+        assert_eq!(unesc("\\30 foo"), "0foo");
+        assert_eq!(unesc("-\\31 "), "-1");
+        // Full 6-hex run, then a following char that is NOT whitespace.
+        assert_eq!(unesc("\\0000e9z"), "éz");
+        // Backslash + non-hex char drops the backslash.
+        assert_eq!(unesc("foo\\ bar"), "foo bar");
+        assert_eq!(unesc("a\\#b\\.c"), "a#b.c");
+        assert_eq!(unesc("\\-"), "-");
+        // Zero / surrogate / out-of-range → replacement character.
+        assert_eq!(unesc("\\0 "), "\u{FFFD}");
+        assert_eq!(unesc("\\d800 "), "\u{FFFD}");
+        assert_eq!(unesc("\\110000 "), "\u{FFFD}");
+        // Trailing lone backslash is a parse error → replacement character.
+        assert_eq!(unesc("ab\\"), "ab\u{FFFD}");
+        // Round-trips css_escape for assorted inputs.
+        let esc = |s: &str| {
+            op_css_escape(json!({ "value": s })).unwrap()["escaped"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        for raw in [
+            "foo",
+            "0foo",
+            "-1",
+            "-",
+            "foo bar",
+            "a#b.c",
+            "café",
+            "a\u{1}b",
+            "100% & more",
+        ] {
+            assert_eq!(unesc(&esc(raw)), raw, "round-trip {raw:?}");
+        }
+        // `value` alias and missing-arg error.
+        assert_eq!(
+            op_css_unescape(json!({"value": "a\\ b"})).unwrap()["value"],
+            json!("a b")
+        );
+        assert!(op_css_unescape(json!({})).is_err());
     }
 
     #[test]

@@ -129,6 +129,13 @@ assert_eq Selenium::css_escape("foo bar"), "foo\\ bar", "css_escape: space backs
 assert_eq Selenium::css_escape("a#b.c"),   "a\\#b\\.c", "css_escape: punctuation escaped"
 assert_eq "#" . Selenium::css_escape("user 42"), "#user\\ 42", "css_escape: builds a safe id selector"
 
+# css_unescape: inverse of css_escape (CSS Syntax §4.3.7).
+assert_eq Selenium::css_unescape("\\30 foo"),  "0foo",    "css_unescape: hex escape + trailing whitespace consumed"
+assert_eq Selenium::css_unescape("foo\\ bar"), "foo bar", "css_unescape: backslash + non-hex char drops the backslash"
+assert_eq Selenium::css_unescape("a\\#b\\.c"), "a#b.c",   "css_unescape: punctuation un-escaped"
+assert_eq Selenium::css_unescape(Selenium::css_escape("user 42")), "user 42", "css_unescape: round-trips css_escape"
+assert_eq Selenium::css_unescape(Selenium::css_escape("café")),    "café",    "css_unescape: round-trips non-ASCII"
+
 # build_css_selector: compose a selector from structured parts.
 assert_eq Selenium::build_css_selector(tag => "input", id => "email", classes => ["form-control"], attributes => { type => "email" }), "input#email.form-control[type=\"email\"]", "build_css_selector: tag+id+class+attr"
 assert_eq Selenium::build_css_selector(classes => ["a", "b"]), ".a.b", "build_css_selector: classes only"

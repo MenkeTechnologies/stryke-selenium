@@ -640,6 +640,16 @@ fn Selenium::css_escape ($value) {
     Selenium::_decode("css_escape", selenium__css_escape(to_json({ value => $value })))->{escaped}
 }
 
+## Decode a CSS identifier's escapes back to the raw string — inverse of
+## css_escape (CSS Syntax §4.3.7 "consume an escaped code point"): \ + 1-6 hex
+## digits (one optional trailing whitespace consumed) → that code point (U+FFFD if
+## zero, a surrogate, or > U+10FFFF); \ + any other char → that char literally; a
+## trailing lone \ → U+FFFD. Recovers the original id/class from a serialized
+## selector. Returns the decoded string.
+fn Selenium::css_unescape ($escaped) {
+    Selenium::_decode("css_unescape", selenium__css_unescape(to_json({ escaped => $escaped })))->{value}
+}
+
 ## Quote a string as an XPath 1.0 string literal (the XPath analog of css_escape)
 ## for text/attribute locators: "//button[text()=" . Selenium::xpath_literal($t) . "]".
 ## No-quote → '..', no-double-quote → "..", both → concat('a', "'", 'b', ...).
