@@ -946,6 +946,41 @@ fn op_build_cookie(v: Value) -> Result<Value> {
     Ok(json!({"cookie": out}))
 }
 
+/// Whether a cookie's `Domain` attribute applies to a request `host`, per the
+/// RFC 6265 §5.1.3 domain-matching algorithm: the host matches when it is
+/// identical to the cookie domain, or the cookie domain is a suffix of the host
+/// with a `.` immediately before the suffix AND the host is a hostname (not an IP
+/// address). Both sides are lowercased and a leading `.` on the cookie domain
+/// (historical, ignored) is stripped. opts: `cookie_domain` (or `domain`) and
+/// `host` (required). Returns `{cookie_domain, host, matches}`. Pure.
+fn op_cookie_domain_matches(v: Value) -> Result<Value> {
+    let cookie_domain = arg_str(&v, "cookie_domain")
+        .or_else(|_| arg_str(&v, "domain"))?
+        .to_string();
+    let host = arg_str(&v, "host")?.to_string();
+    let cd = cookie_domain
+        .trim()
+        .trim_start_matches('.')
+        .to_ascii_lowercase();
+    let h = host.trim().to_ascii_lowercase();
+    let is_ip = h.parse::<std::net::Ipv4Addr>().is_ok()
+        || h.trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::Ipv6Addr>()
+            .is_ok();
+    let matches = if cd.is_empty() {
+        false
+    } else if cd == h {
+        true
+    } else if !is_ip && h.len() > cd.len() && h.ends_with(&cd) {
+        // The character just before the matched suffix must be a dot.
+        h.as_bytes()[h.len() - cd.len() - 1] == b'.'
+    } else {
+        false
+    };
+    Ok(json!({ "cookie_domain": cookie_domain, "host": host, "matches": matches }))
+}
+
 /// Escape a string for safe use as a CSS identifier — a faithful port of the
 /// CSSOM "serialize an identifier" algorithm (what browsers expose as
 /// `CSS.escape()`). Lets a CSS-strategy locator embed an arbitrary id/class
@@ -1260,6 +1295,11 @@ pub extern "C" fn selenium__parse_cookie(args: *const c_char) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
     ffi_call(args, op_build_cookie)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__cookie_domain_matches(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_cookie_domain_matches)
 }
 
 #[no_mangle]
@@ -1671,6 +1711,42 @@ mod tests {
             json!("k=v; Secure")
         );
         assert!(op_build_cookie(json!({"value": "v"})).is_err());
+    }
+
+    #[test]
+    fn cookie_domain_matches_follows_rfc6265() {
+        let m = |cd: &str, host: &str| {
+            op_cookie_domain_matches(json!({ "cookie_domain": cd, "host": host })).unwrap()
+                ["matches"]
+                .clone()
+        };
+        // Identical domains match.
+        assert_eq!(m("example.com", "example.com"), json!(true));
+        // A subdomain matches when a dot precedes the suffix.
+        assert_eq!(m("example.com", "www.example.com"), json!(true));
+        assert_eq!(m("example.com", "a.b.example.com"), json!(true));
+        // A leading dot on the cookie domain is ignored.
+        assert_eq!(m(".example.com", "www.example.com"), json!(true));
+        // Case-insensitive.
+        assert_eq!(m("Example.COM", "WWW.example.com"), json!(true));
+        // A suffix without a dot boundary does NOT match (notexample.com).
+        assert_eq!(m("example.com", "notexample.com"), json!(false));
+        // A different domain does not match.
+        assert_eq!(m("example.com", "example.org"), json!(false));
+        // The host being a superdomain of the cookie domain does not match.
+        assert_eq!(m("www.example.com", "example.com"), json!(false));
+        // An IP host only matches identically — never via the suffix rule.
+        assert_eq!(m("0.0.1", "192.168.0.1"), json!(false));
+        assert_eq!(m("192.168.0.1", "192.168.0.1"), json!(true));
+        // `domain` alias; empty cookie domain never matches; missing args error.
+        assert_eq!(
+            op_cookie_domain_matches(json!({"domain": "x.com", "host": "x.com"})).unwrap()
+                ["matches"],
+            json!(true)
+        );
+        assert_eq!(m("", "example.com"), json!(false));
+        assert!(op_cookie_domain_matches(json!({"host": "x.com"})).is_err());
+        assert!(op_cookie_domain_matches(json!({})).is_err());
     }
 
     #[test]
