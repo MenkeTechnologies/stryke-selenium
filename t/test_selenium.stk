@@ -115,4 +115,10 @@ assert_eq Selenium::build_cookie(name => "session", value => "abc123", domain =>
 assert_eq Selenium::build_cookie(name => "k", value => "v"), "k=v", "build_cookie: minimal cookie, no flags"
 assert_eq Selenium::parse_cookie(Selenium::build_cookie(name => "s", value => "x", secure => 1))->{secure}, 1, "build_cookie → parse_cookie round-trips the Secure flag"
 
+# css_escape: CSSOM serialize-an-identifier (browser CSS.escape).
+assert_eq Selenium::css_escape("foo"),     "foo",       "css_escape: plain identifier unchanged"
+assert_eq Selenium::css_escape("0foo"),    "\\30 foo",  "css_escape: leading digit escaped as code point"
+assert_eq Selenium::css_escape("foo bar"), "foo\\ bar", "css_escape: space backslash-escaped"
+assert_eq Selenium::css_escape("a#b.c"),   "a\\#b\\.c", "css_escape: punctuation escaped"
+assert_eq "#" . Selenium::css_escape("user 42"), "#user\\ 42", "css_escape: builds a safe id selector"
 test_run

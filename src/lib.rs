@@ -914,6 +914,40 @@ fn op_build_cookie(v: Value) -> Result<Value> {
     Ok(json!({"cookie": out}))
 }
 
+/// Escape a string for safe use as a CSS identifier — a faithful port of the
+/// CSSOM "serialize an identifier" algorithm (what browsers expose as
+/// `CSS.escape()`). Lets a CSS-strategy locator embed an arbitrary id/class
+/// value (`#` + css_escape(id)). opts: `value` (required). Returns `{escaped}`.
+/// Pure.
+fn op_css_escape(v: Value) -> Result<Value> {
+    let s = arg_str(&v, "value")?;
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    for (i, &c) in chars.iter().enumerate() {
+        let cp = c as u32;
+        if cp == 0 {
+            out.push('\u{FFFD}');
+        } else if (0x1..=0x1f).contains(&cp)
+            || cp == 0x7f
+            || (i == 0 && c.is_ascii_digit())
+            || (i == 1 && c.is_ascii_digit() && chars[0] == '-')
+        {
+            // "the character escaped as code point": `\` + lowercase hex + space.
+            out.push_str(&format!("\\{cp:x} "));
+        } else if i == 0 && c == '-' && chars.len() == 1 {
+            // A lone leading hyphen is backslash-escaped.
+            out.push('\\');
+            out.push('-');
+        } else if cp >= 0x80 || c == '-' || c == '_' || c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else {
+            out.push('\\');
+            out.push(c);
+        }
+    }
+    Ok(json!({ "escaped": out }))
+}
+
 #[no_mangle]
 pub extern "C" fn selenium__parse_locator(args: *const c_char) -> *const c_char {
     ffi_call(args, op_parse_locator)
@@ -952,6 +986,11 @@ pub extern "C" fn selenium__parse_cookie(args: *const c_char) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
     ffi_call(args, op_build_cookie)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__css_escape(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_css_escape)
 }
 
 #[cfg(test)]
@@ -1300,5 +1339,34 @@ mod tests {
             json!("k=v; Secure")
         );
         assert!(op_build_cookie(json!({"value": "v"})).is_err());
+    }
+
+    #[test]
+    fn css_escape_matches_cssom_serialize_identifier() {
+        let esc = |s: &str| {
+            op_css_escape(json!({ "value": s })).unwrap()["escaped"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        // Plain identifiers, hyphens, underscores, and non-ASCII pass through.
+        assert_eq!(esc("foo"), "foo");
+        assert_eq!(esc("--a"), "--a");
+        assert_eq!(esc("café"), "café");
+        // A leading digit is escaped as a code point (`\31 ` etc.).
+        assert_eq!(esc("0foo"), "\\30 foo");
+        // A digit second char after a leading hyphen is also code-point escaped.
+        assert_eq!(esc("-1"), "-\\31 ");
+        // A lone hyphen is backslash-escaped.
+        assert_eq!(esc("-"), "\\-");
+        // Punctuation and whitespace get a backslash.
+        assert_eq!(esc("foo bar"), "foo\\ bar");
+        assert_eq!(esc("a#b.c"), "a\\#b\\.c");
+        // NULL becomes the replacement character; control chars are code-point escaped.
+        assert_eq!(esc("a\u{0}b"), "a\u{FFFD}b");
+        assert_eq!(esc("a\u{1}b"), "a\\1 b");
+        // Building a real id selector with css_escape is safe to feed a query.
+        assert_eq!(format!("#{}", esc("user 42")), "#user\\ 42");
+        assert!(op_css_escape(json!({})).is_err());
     }
 }
