@@ -706,6 +706,38 @@ fn op_locator_to_w3c(v: Value) -> Result<Value> {
     Ok(json!({"using": using, "value": w3c_value, "strategy": strategy}))
 }
 
+/// W3C WebDriver `using` string → canonical locator strategy. The wire protocol
+/// carries only these five; `id`/`name`/`class` are client-side conveniences
+/// that have already collapsed to `css selector` by this layer.
+fn strategy_for_w3c_using(using: &str) -> Option<&'static str> {
+    match using.trim().to_ascii_lowercase().as_str() {
+        "css selector" => Some("css"),
+        "xpath" => Some("xpath"),
+        "tag name" => Some("tag"),
+        "link text" => Some("link_text"),
+        "partial link text" => Some("partial_link_text"),
+        _ => None,
+    }
+}
+
+/// Translate a W3C WebDriver `{using, value}` pair back to a canonical
+/// `strategy=value` locator — the inverse of `locator_to_w3c` for the five
+/// strategies the protocol actually carries (`css selector`→`css`, `tag name`→
+/// `tag`, `link text`→`link_text`, `partial link text`→`partial_link_text`,
+/// `xpath`→`xpath`). opts: `using` (required), `value` (required). Returns
+/// `{strategy, value, locator}`. Pure.
+fn op_w3c_to_locator(v: Value) -> Result<Value> {
+    let using = arg_str(&v, "using")?;
+    let value = arg_str(&v, "value")?;
+    let strategy = strategy_for_w3c_using(using)
+        .ok_or_else(|| anyhow::anyhow!("unknown W3C using strategy '{using}'"))?;
+    Ok(json!({
+        "strategy": strategy,
+        "value": value,
+        "locator": format!("{strategy}={value}"),
+    }))
+}
+
 /// Resolve a WebDriver special key name to its Unicode code point. Selenium and
 /// the W3C WebDriver spec assign control/navigation keys to the Private Use Area
 /// (`NULL` U+E000 … `DELETE` U+E017, `F1`–`F12` U+E031–U+E03C); `send_keys`
@@ -969,6 +1001,11 @@ pub extern "C" fn selenium__locator_to_w3c(args: *const c_char) -> *const c_char
 }
 
 #[no_mangle]
+pub extern "C" fn selenium__w3c_to_locator(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_w3c_to_locator)
+}
+
+#[no_mangle]
 pub extern "C" fn selenium__key_code(args: *const c_char) -> *const c_char {
     ffi_call(args, op_key_code)
 }
@@ -1162,6 +1199,39 @@ mod tests {
             json!("css selector")
         );
         assert!(op_locator_to_w3c(json!({"locator": "bogus=x"})).is_err());
+    }
+
+    #[test]
+    fn w3c_to_locator_inverts_locator_to_w3c() {
+        let chk =
+            |u: &str, val: &str| op_w3c_to_locator(json!({"using": u, "value": val})).unwrap();
+        // Each of the five W3C `using` strings maps back to its canonical strategy.
+        for (using, strat) in [
+            ("css selector", "css"),
+            ("xpath", "xpath"),
+            ("tag name", "tag"),
+            ("link text", "link_text"),
+            ("partial link text", "partial_link_text"),
+        ] {
+            let v = chk(using, "X");
+            assert_eq!(v["strategy"], json!(strat), "{using} → {strat}");
+            assert_eq!(v["locator"], json!(format!("{strat}=X")));
+        }
+        // Case-insensitive on the `using` string.
+        assert_eq!(chk("CSS Selector", ".btn")["strategy"], json!("css"));
+        // Round-trips locator_to_w3c for the natively-carried strategies.
+        for loc in ["css=.btn", "xpath=//a", "tag=div", "link_text=Home"] {
+            let w3c = op_locator_to_w3c(json!({ "locator": loc })).unwrap();
+            let back = op_w3c_to_locator(json!({
+                "using": w3c["using"].as_str().unwrap(),
+                "value": w3c["value"].as_str().unwrap(),
+            }))
+            .unwrap();
+            assert_eq!(back["locator"], json!(loc), "round-trip {loc}");
+        }
+        // `id`/`name`/`class` are not W3C `using` strings → rejected.
+        assert!(op_w3c_to_locator(json!({"using": "id", "value": "main"})).is_err());
+        assert!(op_w3c_to_locator(json!({"using": "css selector"})).is_err());
     }
 
     #[test]

@@ -86,6 +86,13 @@ assert_eq Selenium::locator_to_w3c("name", "q")->{value}, "[name=\"q\"]", "locat
 assert_eq Selenium::locator_to_w3c("class", "active")->{value}, "[class~=\"active\"]", "locator_to_w3c: class → [class~=...]"
 assert_dies fn { Selenium::locator_to_w3c("bogus=x") }, "locator_to_w3c: rejects unknown strategy"
 
+# w3c_to_locator: inverse of locator_to_w3c for the five protocol strategies.
+assert_eq Selenium::w3c_to_locator("css selector", ".btn")->{strategy}, "css", "w3c_to_locator: css selector → css"
+assert_eq Selenium::w3c_to_locator("css selector", ".btn")->{locator}, "css=.btn", "w3c_to_locator: rebuilds the locator string"
+assert_eq Selenium::w3c_to_locator("tag name", "div")->{strategy}, "tag", "w3c_to_locator: tag name → tag"
+assert_eq Selenium::w3c_to_locator("partial link text", "Ho")->{strategy}, "partial_link_text", "w3c_to_locator: partial link text"
+assert_dies fn { Selenium::w3c_to_locator("id", "main") }, "w3c_to_locator: id is not a W3C using strategy"
+
 # key_code: WebDriver special-key Private-Use-Area code points.
 assert_eq Selenium::key_code("Enter")->{code_point}, "U+E007", "key_code: Enter is U+E007"
 assert_eq Selenium::key_code("Return")->{codepoint}, 57350,    "key_code: Return (E006) differs from Enter"

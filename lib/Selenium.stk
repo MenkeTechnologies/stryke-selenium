@@ -596,6 +596,14 @@ fn Selenium::locator_to_w3c ($strategy, $value = undef) {
     Selenium::_decode("locator_to_w3c", selenium__locator_to_w3c(to_json($req)))
 }
 
+## Translate a W3C WebDriver { using, value } pair back to a canonical
+## strategy=value locator — the inverse of locator_to_w3c for the five
+## protocol strategies (css selector, xpath, tag name, link text, partial
+## link text). Returns { strategy, value, locator }.
+fn Selenium::w3c_to_locator ($using, $value) {
+    Selenium::_decode("w3c_to_locator", selenium__w3c_to_locator(to_json({ using => $using, value => $value })))
+}
+
 ## Resolve a WebDriver special key name to its Private-Use-Area code point ("Enter"
 ## → U+E007), as send_keys uses to press control/navigation keys. Names are
 ## case-insensitive and ignore _/-/spaces; F1–F12 and aliases (esc, ctrl, del,
