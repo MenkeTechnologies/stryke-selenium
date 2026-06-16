@@ -128,4 +128,11 @@ assert_eq Selenium::css_escape("0foo"),    "\\30 foo",  "css_escape: leading dig
 assert_eq Selenium::css_escape("foo bar"), "foo\\ bar", "css_escape: space backslash-escaped"
 assert_eq Selenium::css_escape("a#b.c"),   "a\\#b\\.c", "css_escape: punctuation escaped"
 assert_eq "#" . Selenium::css_escape("user 42"), "#user\\ 42", "css_escape: builds a safe id selector"
+
+# build_css_selector: compose a selector from structured parts.
+assert_eq Selenium::build_css_selector(tag => "input", id => "email", classes => ["form-control"], attributes => { type => "email" }), "input#email.form-control[type=\"email\"]", "build_css_selector: tag+id+class+attr"
+assert_eq Selenium::build_css_selector(classes => ["a", "b"]), ".a.b", "build_css_selector: classes only"
+assert_eq Selenium::build_css_selector(tag => "p", class => "lead"), "p.lead", "build_css_selector: single class string"
+assert_eq Selenium::build_css_selector(id => "user 42"), "#user\\ 42", "build_css_selector: id is CSS-escaped"
+assert_dies fn { Selenium::build_css_selector() }, "build_css_selector: needs at least one part"
 test_run

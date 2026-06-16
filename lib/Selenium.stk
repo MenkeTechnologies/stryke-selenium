@@ -639,3 +639,11 @@ fn Selenium::build_cookie (%opts) {
 fn Selenium::css_escape ($value) {
     Selenium::_decode("css_escape", selenium__css_escape(to_json({ value => $value })))->{escaped}
 }
+
+## Build a CSS selector from %parts: tag, id (# + CSS-escaped), classes (arrayref
+## or a single class string, each . + CSS-escaped), and attributes/attrs (hashref
+## { name => value }, each [name="value"] with the value escaped). Concatenated
+## tag→id→classes→attributes. Returns the selector string.
+fn Selenium::build_css_selector (%parts) {
+    Selenium::_decode("build_css_selector", selenium__build_css_selector(to_json(\%parts)))->{selector}
+}

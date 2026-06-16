@@ -257,6 +257,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::parse_cookie("a=b; Path=/; Secure")` | `→ { name, value, domain, path, secure, http_only, same_site, expires }` — feeds `add_cookie` |
 | `Selenium::build_cookie(%opts)` | `→ Set-Cookie string` — inverse of `parse_cookie`; truthy `secure`/`http_only` become bare flags |
 | `Selenium::css_escape($value)` | `→ escaped string` — CSSOM serialize-an-identifier (browser `CSS.escape`); embed an arbitrary id/class in a CSS selector |
+| `Selenium::build_css_selector(%parts)` | `→ selector string` — compose `tag`/`id`/`classes`/`attributes` into a CSS selector (id/class CSS-escaped, attr values `"`/`\`-escaped) |
 
 ## [0x04] Launching a WebDriver server
 

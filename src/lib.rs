@@ -951,8 +951,10 @@ fn op_build_cookie(v: Value) -> Result<Value> {
 /// `CSS.escape()`). Lets a CSS-strategy locator embed an arbitrary id/class
 /// value (`#` + css_escape(id)). opts: `value` (required). Returns `{escaped}`.
 /// Pure.
-fn op_css_escape(v: Value) -> Result<Value> {
-    let s = arg_str(&v, "value")?;
+/// Serialize a string as a CSS identifier (CSSOM "serialize an identifier", what
+/// browsers expose as `CSS.escape`). Shared by `css_escape` and the id/class
+/// parts of `build_css_selector`.
+fn css_escape_ident(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len());
     for (i, &c) in chars.iter().enumerate() {
@@ -977,7 +979,73 @@ fn op_css_escape(v: Value) -> Result<Value> {
             out.push(c);
         }
     }
-    Ok(json!({ "escaped": out }))
+    out
+}
+
+fn op_css_escape(v: Value) -> Result<Value> {
+    Ok(json!({ "escaped": css_escape_ident(arg_str(&v, "value")?) }))
+}
+
+/// Build a CSS selector from structured parts — a typed alternative to
+/// hand-concatenating one. opts: `tag` (optional element name, emitted as-is),
+/// `id` (optional → `#` + CSS-escaped identifier), `classes` (optional array, or
+/// a single `class` string, each → `.` + CSS-escaped), and `attributes`/`attrs`
+/// (optional object `{name: value}`, each → `[name="value"]` with the value
+/// `"`/`\`-escaped). Parts are concatenated tag→id→classes→attributes; attribute
+/// order follows the object. At least one part is required. Returns `{selector}`.
+/// Pure.
+fn op_build_css_selector(v: Value) -> Result<Value> {
+    let mut sel = String::new();
+    if let Some(tag) = v
+        .get("tag")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        sel.push_str(tag);
+    }
+    if let Some(id) = v
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        sel.push('#');
+        sel.push_str(&css_escape_ident(id));
+    }
+    if let Some(classes) = v.get("classes").and_then(Value::as_array) {
+        for c in classes {
+            let name = c
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("each class must be a string"))?;
+            if !name.is_empty() {
+                sel.push('.');
+                sel.push_str(&css_escape_ident(name));
+            }
+        }
+    }
+    if let Some(class) = v
+        .get("class")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        sel.push('.');
+        sel.push_str(&css_escape_ident(class));
+    }
+    if let Some(attrs) = v
+        .get("attributes")
+        .or_else(|| v.get("attrs"))
+        .and_then(Value::as_object)
+    {
+        for (k, val) in attrs {
+            let s = val.as_str().unwrap_or("");
+            sel.push_str(&format!("[{k}=\"{}\"]", css_escape_string(s)));
+        }
+    }
+    if sel.is_empty() {
+        return Err(anyhow::anyhow!(
+            "build_css_selector needs at least one of tag/id/classes/attributes"
+        ));
+    }
+    Ok(json!({ "selector": sel }))
 }
 
 #[no_mangle]
@@ -1028,6 +1096,11 @@ pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn selenium__css_escape(args: *const c_char) -> *const c_char {
     ffi_call(args, op_css_escape)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__build_css_selector(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_build_css_selector)
 }
 
 #[cfg(test)]
@@ -1438,5 +1511,44 @@ mod tests {
         // Building a real id selector with css_escape is safe to feed a query.
         assert_eq!(format!("#{}", esc("user 42")), "#user\\ 42");
         assert!(op_css_escape(json!({})).is_err());
+    }
+
+    #[test]
+    fn build_css_selector_composes_parts_in_order() {
+        let sel = |v: Value| {
+            op_build_css_selector(v).unwrap()["selector"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        // tag → id → classes → attributes, in that order.
+        assert_eq!(
+            sel(json!({
+                "tag": "input", "id": "email", "classes": ["form-control", "lg"],
+                "attributes": {"type": "email", "required": ""}
+            })),
+            "input#email.form-control.lg[type=\"email\"][required=\"\"]"
+        );
+        // Individual parts on their own.
+        assert_eq!(sel(json!({"tag": "div"})), "div");
+        assert_eq!(sel(json!({"id": "main"})), "#main");
+        assert_eq!(sel(json!({"classes": ["a", "b"]})), ".a.b");
+        // A single `class` string is accepted too.
+        assert_eq!(sel(json!({"tag": "p", "class": "lead"})), "p.lead");
+        // id/class values are CSS-escaped; attribute values are "/\-escaped.
+        assert_eq!(sel(json!({"id": "user 42"})), "#user\\ 42");
+        assert_eq!(
+            sel(json!({"attributes": {"data-x": "a\"b\\c"}})),
+            "[data-x=\"a\\\"b\\\\c\"]"
+        );
+        // attrs is an alias for attributes.
+        assert_eq!(
+            sel(json!({"tag": "a", "attrs": {"href": "/x"}})),
+            "a[href=\"/x\"]"
+        );
+        // Empty parts are skipped; an entirely empty spec errors.
+        assert_eq!(sel(json!({"tag": "div", "id": "", "classes": []})), "div");
+        assert!(op_build_css_selector(json!({})).is_err());
+        assert!(op_build_css_selector(json!({"id": "", "tag": ""})).is_err());
     }
 }
