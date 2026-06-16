@@ -640,6 +640,16 @@ fn Selenium::css_escape ($value) {
     Selenium::_decode("css_escape", selenium__css_escape(to_json({ value => $value })))->{escaped}
 }
 
+## Escape a string as a double-quoted CSS attribute-selector value — the "..." in
+## [data-id="..."]. Backslash and the double-quote are escaped and the result is
+## wrapped in double quotes, ready to splice into a selector:
+## "[data-id=" . Selenium::css_escape_string($v) . "]". The string-context
+## companion of css_escape (which serializes a CSS identifier). Returns the quoted
+## escaped string.
+fn Selenium::css_escape_string ($value) {
+    Selenium::_decode("css_escape_string", selenium__css_escape_string(to_json({ value => $value })))->{escaped}
+}
+
 ## Decode a CSS identifier's escapes back to the raw string — inverse of
 ## css_escape (CSS Syntax §4.3.7 "consume an escaped code point"): \ + 1-6 hex
 ## digits (one optional trailing whitespace consumed) → that code point (U+FFFD if

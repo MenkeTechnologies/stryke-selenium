@@ -258,6 +258,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::build_cookie(%opts)` | `→ Set-Cookie string` — inverse of `parse_cookie`; truthy `secure`/`http_only` become bare flags |
 | `Selenium::css_escape($value)` | `→ escaped string` — CSSOM serialize-an-identifier (browser `CSS.escape`); embed an arbitrary id/class in a CSS selector |
 | `Selenium::css_unescape($escaped)` | `→ decoded string` — inverse of `css_escape` (CSS Syntax §4.3.7); decodes `\HH ` hex + `\c` escapes back to the raw id/class |
+| `Selenium::css_escape_string($value)` | `→ quoted string` — escape + double-quote a CSS attribute-selector value (`[attr="…"]`); the string-context companion of `css_escape` |
 | `Selenium::build_css_selector(%parts)` | `→ selector string` — compose `tag`/`id`/`classes`/`attributes` into a CSS selector (id/class CSS-escaped, attr values `"`/`\`-escaped) |
 | `Selenium::xpath_literal($value)` | `→ literal string` — quote an arbitrary string as an XPath 1.0 literal for text/attribute locators; uses `concat()` when it contains both `'` and `"` |
 

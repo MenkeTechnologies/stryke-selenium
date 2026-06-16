@@ -986,6 +986,17 @@ fn op_css_escape(v: Value) -> Result<Value> {
     Ok(json!({ "escaped": css_escape_ident(arg_str(&v, "value")?) }))
 }
 
+/// Escape a string for use as a double-quoted CSS attribute-selector value — the
+/// `…` in `[data-id="…"]`. Backslash and the double-quote are escaped (`\` → `\\`,
+/// `"` → `\"`) and the result is wrapped in double quotes, ready to splice into a
+/// selector. The string-context companion of `css_escape`, which serializes a CSS
+/// *identifier* (for `#id` / `.class`). opts: `value` (required). Returns
+/// `{value, escaped}`. Pure.
+fn op_css_escape_string(v: Value) -> Result<Value> {
+    let s = arg_str(&v, "value")?;
+    Ok(json!({ "value": s, "escaped": format!("\"{}\"", css_escape_string(s)) }))
+}
+
 /// Decode a CSS identifier's escapes back to the raw string — the inverse of
 /// `css_escape`. A faithful port of CSS Syntax §4.3.7 "consume an escaped code
 /// point": `\` + 1-6 hex digits (with one optional trailing whitespace consumed)
@@ -1171,6 +1182,11 @@ pub extern "C" fn selenium__build_cookie(args: *const c_char) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn selenium__css_escape(args: *const c_char) -> *const c_char {
     ffi_call(args, op_css_escape)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__css_escape_string(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_css_escape_string)
 }
 
 #[no_mangle]
@@ -1596,6 +1612,26 @@ mod tests {
         // Building a real id selector with css_escape is safe to feed a query.
         assert_eq!(format!("#{}", esc("user 42")), "#user\\ 42");
         assert!(op_css_escape(json!({})).is_err());
+    }
+
+    #[test]
+    fn css_escape_string_quotes_attribute_values() {
+        let esc = |s: &str| {
+            op_css_escape_string(json!({ "value": s })).unwrap()["escaped"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        // Plain value is wrapped in double quotes.
+        assert_eq!(esc("main"), "\"main\"");
+        // The double-quote and backslash are escaped (the injection-relevant pair).
+        assert_eq!(esc("a\"b"), "\"a\\\"b\"");
+        assert_eq!(esc("a\\b"), "\"a\\\\b\"");
+        // A space stays literal inside the quotes (unlike an identifier escape).
+        assert_eq!(esc("two words"), "\"two words\"");
+        // Ready to splice into an attribute selector.
+        assert_eq!(format!("[data-id={}]", esc("v\"x")), "[data-id=\"v\\\"x\"]");
+        assert!(op_css_escape_string(json!({})).is_err());
     }
 
     #[test]

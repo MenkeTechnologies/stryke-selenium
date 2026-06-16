@@ -136,6 +136,12 @@ assert_eq Selenium::css_unescape("a\\#b\\.c"), "a#b.c",   "css_unescape: punctua
 assert_eq Selenium::css_unescape(Selenium::css_escape("user 42")), "user 42", "css_unescape: round-trips css_escape"
 assert_eq Selenium::css_unescape(Selenium::css_escape("café")),    "café",    "css_unescape: round-trips non-ASCII"
 
+# css_escape_string: escape + double-quote a CSS attribute-selector value.
+assert_eq Selenium::css_escape_string("main"),  "\"main\"",        "css_escape_string: plain value wrapped in quotes"
+assert_eq Selenium::css_escape_string("a\"b"),  "\"a\\\"b\"",      "css_escape_string: double-quote escaped"
+assert_eq Selenium::css_escape_string("a\\b"),  "\"a\\\\b\"",      "css_escape_string: backslash escaped"
+assert_eq "[data-id=" . Selenium::css_escape_string("x y") . "]", "[data-id=\"x y\"]", "css_escape_string: builds a safe attribute selector"
+
 # build_css_selector: compose a selector from structured parts.
 assert_eq Selenium::build_css_selector(tag => "input", id => "email", classes => ["form-control"], attributes => { type => "email" }), "input#email.form-control[type=\"email\"]", "build_css_selector: tag+id+class+attr"
 assert_eq Selenium::build_css_selector(classes => ["a", "b"]), ".a.b", "build_css_selector: classes only"
