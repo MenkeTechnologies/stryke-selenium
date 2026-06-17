@@ -697,6 +697,16 @@ fn Selenium::build_css_selector (%parts) {
     Selenium::_decode("build_css_selector", selenium__build_css_selector(to_json(\%parts)))->{selector}
 }
 
+## Decompose a simple compound CSS selector into its parts — the inverse of
+## build_css_selector. Handles a tag/* type selector, #id, .class (any number),
+## and [name="value"] / [name] attribute selectors, css-unescaping every
+## identifier and quoted value. Only the simple-selector grammar build_css_selector
+## emits is supported (no combinators, pseudo-classes, or selector lists). Returns
+## a hashref { tag, id, classes:[…], attributes:{…} } (tag/id undef when absent).
+fn Selenium::parse_css_selector ($selector) {
+    Selenium::_decode("parse_css_selector", selenium__parse_css_selector(to_json({ selector => $selector })))
+}
+
 ## Build an XPath locator from %parts (the XPath counterpart of
 ## build_css_selector): tag (default *), id ([@id=…]), classes (arrayref or a
 ## single class string, each the contains(concat(' ',normalize-space(@class),' '),

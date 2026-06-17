@@ -1279,6 +1279,183 @@ fn op_build_css_selector(v: Value) -> Result<Value> {
     Ok(json!({ "selector": sel }))
 }
 
+/// Read one raw CSS identifier (escape sequences intact) from `it`, stopping
+/// before the next unescaped `#`, `.`, or `[`. The caller css-unescapes the
+/// result to recover the real value. Consumes a `\` escape — either a hex run
+/// (`\26 `) or a single backslashed character (`\.`) — as one unit so a delimiter
+/// hidden behind a backslash does not end the identifier early.
+fn read_css_ident_raw(it: &mut std::iter::Peekable<std::str::Chars>) -> String {
+    let mut raw = String::new();
+    while let Some(&c) = it.peek() {
+        match c {
+            // Part delimiters, whitespace, and combinators end the identifier; a
+            // leftover combinator/space is then rejected by the caller's loop.
+            '#' | '.' | '[' | ' ' | '\t' | '\n' | '\r' | '\u{c}' | '>' | '+' | '~' | ',' => break,
+            '\\' => {
+                raw.push(it.next().unwrap());
+                match it.peek().copied() {
+                    Some(h) if h.is_ascii_hexdigit() => {
+                        let mut k = 0;
+                        while k < 6 {
+                            match it.peek().copied() {
+                                Some(d) if d.is_ascii_hexdigit() => {
+                                    raw.push(it.next().unwrap());
+                                    k += 1;
+                                }
+                                _ => break,
+                            }
+                        }
+                        if matches!(it.peek(), Some('\u{9}' | '\u{a}' | '\u{c}' | '\u{d}' | ' ')) {
+                            raw.push(it.next().unwrap());
+                        }
+                    }
+                    Some(_) => raw.push(it.next().unwrap()),
+                    None => {}
+                }
+            }
+            _ => raw.push(it.next().unwrap()),
+        }
+    }
+    raw
+}
+
+/// Read one `[name=value]` / `[name]` attribute selector body from `it` (the
+/// opening `[` already consumed), up to the matching `]`. A quoted value (`"…"`
+/// or `'…'`) is unescaped (`\"`→`"`, `\\`→`\`) and an optional case flag (`i`/`s`)
+/// after it is skipped; a bare value is taken verbatim; `[name]` (no `=`) yields a
+/// null value (presence selector). Returns `(name, value)`.
+fn read_css_attr(it: &mut std::iter::Peekable<std::str::Chars>) -> Result<(String, Value)> {
+    let mut name = String::new();
+    loop {
+        match it.next() {
+            None => return Err(anyhow::anyhow!("unterminated attribute selector")),
+            Some('=') => break,
+            Some(']') => {
+                let n = name.trim().to_string();
+                if n.is_empty() {
+                    return Err(anyhow::anyhow!("attribute selector has an empty name"));
+                }
+                return Ok((n, Value::Null));
+            }
+            Some(c) => name.push(c),
+        }
+    }
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(anyhow::anyhow!("attribute selector has an empty name"));
+    }
+    let value = match it.peek().copied() {
+        Some(q @ ('"' | '\'')) => {
+            it.next();
+            let mut s = String::new();
+            loop {
+                match it.next() {
+                    None => return Err(anyhow::anyhow!("unterminated quoted attribute value")),
+                    Some('\\') => {
+                        if let Some(n) = it.next() {
+                            s.push(n);
+                        }
+                    }
+                    Some(c) if c == q => break,
+                    Some(c) => s.push(c),
+                }
+            }
+            loop {
+                match it.next() {
+                    None => return Err(anyhow::anyhow!("unterminated attribute selector")),
+                    Some(']') => break,
+                    Some(_) => {}
+                }
+            }
+            s
+        }
+        _ => {
+            let mut s = String::new();
+            loop {
+                match it.next() {
+                    None => return Err(anyhow::anyhow!("unterminated attribute selector")),
+                    Some(']') => break,
+                    Some(c) => s.push(c),
+                }
+            }
+            s.trim().to_string()
+        }
+    };
+    Ok((name, json!(value)))
+}
+
+/// Decompose a simple compound CSS selector into its parts — the inverse of
+/// build_css_selector. Handles a `tag`/`*` type selector, `#id`, `.class` (any
+/// number), and `[name="value"]` / `[name]` attribute selectors, css-unescaping
+/// every identifier and quoted value. Only the simple-selector grammar that
+/// build_css_selector emits is supported (no combinators, pseudo-classes, or
+/// selector lists). opts: `selector` (or `value`, required). Returns
+/// `{tag, id, classes:[…], attributes:{…}}` (tag/id null when absent). Pure.
+fn op_parse_css_selector(v: Value) -> Result<Value> {
+    let sel = v
+        .get("selector")
+        .or_else(|| v.get("value"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("missing selector"))?;
+    let unescape = |raw: &str| -> String {
+        op_css_unescape(json!({ "escaped": raw }))
+            .ok()
+            .and_then(|o| o["value"].as_str().map(str::to_string))
+            .unwrap_or_else(|| raw.to_string())
+    };
+    let mut it = sel.chars().peekable();
+    let mut tag = Value::Null;
+    let mut id = Value::Null;
+    let mut classes: Vec<Value> = Vec::new();
+    let mut attributes = serde_json::Map::new();
+    // An optional leading type selector (anything not starting a #/./[ part).
+    if matches!(it.peek(), Some(&c) if c != '#' && c != '.' && c != '[') {
+        let raw = read_css_ident_raw(&mut it);
+        if !raw.is_empty() {
+            tag = json!(unescape(&raw));
+        }
+    }
+    while let Some(&c) = it.peek() {
+        match c {
+            '#' => {
+                it.next();
+                let raw = read_css_ident_raw(&mut it);
+                if raw.is_empty() {
+                    return Err(anyhow::anyhow!("empty id in selector"));
+                }
+                id = json!(unescape(&raw));
+            }
+            '.' => {
+                it.next();
+                let raw = read_css_ident_raw(&mut it);
+                if raw.is_empty() {
+                    return Err(anyhow::anyhow!("empty class in selector"));
+                }
+                classes.push(json!(unescape(&raw)));
+            }
+            '[' => {
+                it.next();
+                let (name, value) = read_css_attr(&mut it)?;
+                attributes.insert(name, value);
+            }
+            other => {
+                return Err(anyhow::anyhow!(
+                    "unexpected character `{other}` in selector"
+                ));
+            }
+        }
+    }
+    if tag.is_null() && id.is_null() && classes.is_empty() && attributes.is_empty() {
+        return Err(anyhow::anyhow!("empty or unparseable selector: {sel}"));
+    }
+    Ok(json!({
+        "tag": tag,
+        "id": id,
+        "classes": classes,
+        "attributes": Value::Object(attributes),
+    }))
+}
+
 #[no_mangle]
 pub extern "C" fn selenium__parse_locator(args: *const c_char) -> *const c_char {
     ffi_call(args, op_parse_locator)
@@ -1357,6 +1534,11 @@ pub extern "C" fn selenium__xpath_literal(args: *const c_char) -> *const c_char 
 #[no_mangle]
 pub extern "C" fn selenium__build_css_selector(args: *const c_char) -> *const c_char {
     ffi_call(args, op_build_css_selector)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__parse_css_selector(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_parse_css_selector)
 }
 
 #[no_mangle]
@@ -1949,6 +2131,51 @@ mod tests {
         assert_eq!(sel(json!({"tag": "div", "id": "", "classes": []})), "div");
         assert!(op_build_css_selector(json!({})).is_err());
         assert!(op_build_css_selector(json!({"id": "", "tag": ""})).is_err());
+    }
+
+    #[test]
+    fn parse_css_selector_inverts_build_css_selector() {
+        let p = |s: &str| op_parse_css_selector(json!({ "selector": s })).unwrap();
+        // Full compound selector decomposes into all parts.
+        let v = p("input#email.form-control.lg[type=\"email\"][required=\"\"]");
+        assert_eq!(v["tag"], json!("input"));
+        assert_eq!(v["id"], json!("email"));
+        assert_eq!(v["classes"], json!(["form-control", "lg"]));
+        assert_eq!(v["attributes"]["type"], json!("email"));
+        assert_eq!(v["attributes"]["required"], json!(""));
+        // Individual parts; absent tag/id are null.
+        assert_eq!(p("#main")["id"], json!("main"));
+        assert_eq!(p("#main")["tag"], Value::Null);
+        assert_eq!(p(".a.b")["classes"], json!(["a", "b"]));
+        // Escaped id (`\ ` space) and "/\-escaped attribute value are decoded.
+        assert_eq!(p("#user\\ 42")["id"], json!("user 42"));
+        assert_eq!(
+            p("[data-x=\"a\\\"b\\\\c\"]")["attributes"]["data-x"],
+            json!("a\"b\\c")
+        );
+        // A presence selector `[name]` → null value.
+        assert_eq!(p("[disabled]")["attributes"]["disabled"], Value::Null);
+        // Round-trip every build output back to its parts.
+        for spec in [
+            json!({"tag": "div"}),
+            json!({"id": "main"}),
+            json!({"tag": "input", "id": "email", "classes": ["a", "b"], "attributes": {"type": "text"}}),
+            json!({"id": "user 42"}),
+        ] {
+            let built = op_build_css_selector(spec.clone()).unwrap()["selector"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            let parsed = op_parse_css_selector(json!({ "selector": built })).unwrap();
+            if let Some(t) = spec.get("id").and_then(Value::as_str) {
+                assert_eq!(parsed["id"], json!(t), "id round-trip for {built}");
+            }
+        }
+        // Errors: empty, unterminated attribute, stray combinator.
+        assert!(op_parse_css_selector(json!({"selector": ""})).is_err());
+        assert!(op_parse_css_selector(json!({"selector": "a[b"})).is_err());
+        assert!(op_parse_css_selector(json!({"selector": "a > b"})).is_err());
+        assert!(op_parse_css_selector(json!({})).is_err());
     }
 
     #[test]

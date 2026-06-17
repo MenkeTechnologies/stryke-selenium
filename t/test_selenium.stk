@@ -165,6 +165,19 @@ assert_eq Selenium::build_css_selector(tag => "p", class => "lead"), "p.lead", "
 assert_eq Selenium::build_css_selector(id => "user 42"), "#user\\ 42", "build_css_selector: id is CSS-escaped"
 assert_dies fn { Selenium::build_css_selector() }, "build_css_selector: needs at least one part"
 
+# parse_css_selector: the inverse of build_css_selector.
+val $pc = Selenium::parse_css_selector("input#email.form-control.lg[type=\"email\"]")
+assert_eq $pc->{tag}, "input",                    "parse_css_selector: tag"
+assert_eq $pc->{id}, "email",                     "parse_css_selector: id"
+assert_eq join(",", @{ $pc->{classes} }), "form-control,lg", "parse_css_selector: classes in order"
+assert_eq $pc->{attributes}{type}, "email",       "parse_css_selector: attribute value decoded"
+assert_eq defined(Selenium::parse_css_selector("#main")->{tag}), 0, "parse_css_selector: absent tag → undef"
+assert_eq Selenium::parse_css_selector("#user\\ 42")->{id}, "user 42", "parse_css_selector: escaped id decoded"
+# round-trips build_css_selector
+assert_eq Selenium::parse_css_selector(Selenium::build_css_selector(id => "user 42"))->{id}, "user 42", "parse_css_selector: round-trips build_css_selector"
+assert_dies fn { Selenium::parse_css_selector("a > b") }, "parse_css_selector: rejects a combinator"
+assert_dies fn { Selenium::parse_css_selector("a[b") }, "parse_css_selector: rejects an unterminated attribute"
+
 # build_xpath: the XPath counterpart of build_css_selector.
 assert_eq Selenium::build_xpath(tag => "button", text => "Log in"), "//button[text()='Log in']", "build_xpath: tag + exact text"
 assert_eq Selenium::build_xpath(id => "main"), "//*[\@id='main']", "build_xpath: default * tag with an id predicate"
