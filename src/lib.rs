@@ -1456,6 +1456,29 @@ fn op_parse_css_selector(v: Value) -> Result<Value> {
     }))
 }
 
+/// Convert a simple compound CSS selector to an equivalent XPath — the conversion
+/// automation engineers do when a driver or page is easier to target by XPath.
+/// Decomposes the selector with `parse_css_selector` (tag/`*`, `#id`, `.class`,
+/// `[name="value"]`) and assembles the XPath with `build_xpath`, so `id` becomes
+/// `[@id=…]`, each class the `contains(concat(' ', normalize-space(@class), ' '),
+/// ' cls ')` idiom, and attributes `[@name=…]`; values are XPath-quoted. Only the
+/// simple-selector grammar `parse_css_selector` accepts is supported (no
+/// combinators or pseudo-classes). opts: `selector` (or `value`, required).
+/// Returns `{selector, xpath}`. Pure.
+fn op_css_to_xpath(opts: Value) -> Result<Value> {
+    let selector = opts
+        .get("selector")
+        .or_else(|| opts.get("value"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("missing selector"))?;
+    let parts = op_parse_css_selector(json!({ "selector": selector }))?;
+    let xpath = op_build_xpath(parts)?;
+    Ok(json!({
+        "selector": selector,
+        "xpath": xpath["xpath"],
+    }))
+}
+
 #[no_mangle]
 pub extern "C" fn selenium__parse_locator(args: *const c_char) -> *const c_char {
     ffi_call(args, op_parse_locator)
@@ -1544,6 +1567,11 @@ pub extern "C" fn selenium__parse_css_selector(args: *const c_char) -> *const c_
 #[no_mangle]
 pub extern "C" fn selenium__build_xpath(args: *const c_char) -> *const c_char {
     ffi_call(args, op_build_xpath)
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__css_to_xpath(args: *const c_char) -> *const c_char {
+    ffi_call(args, op_css_to_xpath)
 }
 
 #[cfg(test)]
@@ -2244,5 +2272,42 @@ mod tests {
         assert!(op_build_xpath(json!({})).is_err());
         assert!(op_build_xpath(json!({"tag": "*"})).is_err());
         assert!(op_build_xpath(json!({"tag": "", "id": ""})).is_err());
+    }
+
+    #[test]
+    fn css_to_xpath_converts_a_compound_selector() {
+        let x = |s: &str| {
+            op_css_to_xpath(json!({ "selector": s })).unwrap()["xpath"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        // tag + id + class + attribute compose into the same XPath build_xpath emits.
+        assert_eq!(
+            x("input#email.lg[type=\"email\"]"),
+            "//input[@id='email'][contains(concat(' ', normalize-space(@class), ' '), ' lg ')][@type='email']"
+        );
+        // tag-only, id-only (default `*`), and class-only forms.
+        assert_eq!(x("div"), "//div");
+        assert_eq!(x("#main"), "//*[@id='main']");
+        assert_eq!(
+            x(".active"),
+            "//*[contains(concat(' ', normalize-space(@class), ' '), ' active ')]"
+        );
+        // Equivalent to feeding parse_css_selector's parts to build_xpath directly.
+        let sel = "a.btn[href=\"/x\"]";
+        let parts = op_parse_css_selector(json!({ "selector": sel })).unwrap();
+        assert_eq!(
+            x(sel),
+            op_build_xpath(parts).unwrap()["xpath"].as_str().unwrap()
+        );
+        // `value` alias; an empty/unparseable selector and a combinator are rejected.
+        assert_eq!(
+            op_css_to_xpath(json!({ "value": "span" })).unwrap()["xpath"],
+            json!("//span")
+        );
+        assert!(op_css_to_xpath(json!({ "selector": "" })).is_err());
+        assert!(op_css_to_xpath(json!({ "selector": "a > b" })).is_err());
+        assert!(op_css_to_xpath(json!({})).is_err());
     }
 }

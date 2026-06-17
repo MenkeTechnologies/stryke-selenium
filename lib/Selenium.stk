@@ -716,3 +716,12 @@ fn Selenium::parse_css_selector ($selector) {
 fn Selenium::build_xpath (%parts) {
     Selenium::_decode("build_xpath", selenium__build_xpath(to_json(\%parts)))->{xpath}
 }
+
+## Convert a simple compound CSS $selector to an equivalent XPath — decompose with
+## parse_css_selector (tag/*, #id, .class, [name="value"]) and assemble with
+## build_xpath, so id → [@id=…], each class the contains-concat idiom, and
+## attributes [@name=…] (values XPath-quoted). Only the simple-selector grammar is
+## supported (no combinators/pseudo-classes). Returns the XPath string.
+fn Selenium::css_to_xpath ($selector) {
+    Selenium::_decode("css_to_xpath", selenium__css_to_xpath(to_json({ selector => $selector })))->{xpath}
+}

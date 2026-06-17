@@ -1,6 +1,6 @@
 [package]
 name = "stryke-selenium"
-version = "0.17.0"
+version = "0.18.0"
 description = "Selenium WebDriver automation (browser launch, navigation, find/click/send_keys, JS, screenshot, cookies, windows, frames) for stryke. cdylib package — loaded in-process via dlopen on first `use Selenium`. A process-global tokio runtime bridges thirtyfour's async API to the sync FFI; WebDriver sessions and WebElement handles persist across calls."
 authors = ["MenkeTechnologies"]
 license = "MIT"
@@ -87,6 +87,7 @@ exports = [
     "selenium__build_css_selector",
     "selenium__parse_css_selector",
     "selenium__build_xpath",
+    "selenium__css_to_xpath",
 ]
 
 # Installable smoke-test launcher. `s pkg install -g` writes

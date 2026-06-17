@@ -264,6 +264,7 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::build_css_selector(%parts)` | `→ selector string` — compose `tag`/`id`/`classes`/`attributes` into a CSS selector (id/class CSS-escaped, attr values `"`/`\`-escaped) |
 | `Selenium::parse_css_selector($selector)` | `→ { tag, id, classes:[…], attributes:{…} }` — inverse of `build_css_selector`; decompose a simple compound selector, css-unescaping idents and quoted values (no combinators/pseudo-classes) |
 | `Selenium::build_xpath(%parts)` | `→ xpath string` — XPath counterpart: compose `tag`/`id`/`classes`/`attributes`/`text`/`contains_text` into a `//` locator (values XPath-quoted; classes use the contains-concat idiom) |
+| `Selenium::css_to_xpath($selector)` | `→ xpath string` — convert a simple compound CSS selector to the equivalent XPath (`parse_css_selector` → `build_xpath`); `#id`→`[@id=…]`, `.class`→contains-concat, `[a="b"]`→`[@a=…]`; no combinators/pseudo-classes |
 | `Selenium::xpath_literal($value)` | `→ literal string` — quote an arbitrary string as an XPath 1.0 literal for text/attribute locators; uses `concat()` when it contains both `'` and `"` |
 
 ## [0x04] Launching a WebDriver server

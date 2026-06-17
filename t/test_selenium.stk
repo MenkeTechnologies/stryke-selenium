@@ -178,6 +178,13 @@ assert_eq Selenium::parse_css_selector(Selenium::build_css_selector(id => "user 
 assert_dies fn { Selenium::parse_css_selector("a > b") }, "parse_css_selector: rejects a combinator"
 assert_dies fn { Selenium::parse_css_selector("a[b") }, "parse_css_selector: rejects an unterminated attribute"
 
+# css_to_xpath: convert a compound CSS selector to an equivalent XPath.
+assert_eq Selenium::css_to_xpath("input#email.lg[type=\"email\"]"), "//input[\@id='email'][contains(concat(' ', normalize-space(\@class), ' '), ' lg ')][\@type='email']", "css_to_xpath: tag+id+class+attr"
+assert_eq Selenium::css_to_xpath("div"), "//div",            "css_to_xpath: tag only"
+assert_eq Selenium::css_to_xpath("#main"), "//*[\@id='main']", "css_to_xpath: id only defaults tag to *"
+assert_eq Selenium::css_to_xpath(".active"), "//*[contains(concat(' ', normalize-space(\@class), ' '), ' active ')]", "css_to_xpath: class uses the contains-concat idiom"
+assert_dies fn { Selenium::css_to_xpath("a > b") }, "css_to_xpath: rejects a combinator (parse_css_selector strictness)"
+
 # build_xpath: the XPath counterpart of build_css_selector.
 assert_eq Selenium::build_xpath(tag => "button", text => "Log in"), "//button[text()='Log in']", "build_xpath: tag + exact text"
 assert_eq Selenium::build_xpath(id => "main"), "//*[\@id='main']", "build_xpath: default * tag with an id predicate"
