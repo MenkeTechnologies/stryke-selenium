@@ -73,6 +73,19 @@ pub fn wait_for(
     })
 }
 
+/// The element that currently has keyboard focus (`document.activeElement`)
+/// → a registered element id.
+pub fn active_element(session: Option<u64>) -> Result<u64> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        let elem = drv
+            .active_element()
+            .await
+            .map_err(|e| anyhow!("active_element failed: {e}"))?;
+        register_element(elem)
+    })
+}
+
 pub fn click(id: u64) -> Result<()> {
     let elem = get_element(id)?;
     block_on(async move { elem.click().await.map_err(|e| anyhow!("click failed: {e}")) })

@@ -195,6 +195,22 @@ fn Selenium::set_script_timeout ($seconds, $sid = undef) {
     1
 }
 
+## Read the three WebDriver timeouts the server currently has set, in seconds
+## → a hashref { script, page_load, implicit } (a field is undef when unset).
+fn Selenium::get_timeouts ($sid = undef) {
+    var %args
+    Selenium::_decode("get_timeouts",
+        selenium__get_timeouts(to_json(Selenium::_with_session(%args, $sid))))
+}
+
+## WebDriver server status → a hashref { ready, message }. `ready` is whether
+## the server can accept a new session.
+fn Selenium::status ($sid = undef) {
+    var %args
+    Selenium::_decode("status",
+        selenium__status(to_json(Selenium::_with_session(%args, $sid))))
+}
+
 # ── element queries ─────────────────────────────────────────────────
 
 ## Find the first matching element → element id.
@@ -220,6 +236,14 @@ fn Selenium::wait_for ($selector, $by = "css", $timeout = 10, $sid = undef) {
     var %args = (selector => $selector, by => $by, timeout => $timeout)
     val $o = Selenium::_decode("wait_for",
         selenium__wait_for(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{element}
+}
+
+## The element with keyboard focus (document.activeElement) → element id.
+fn Selenium::active_element ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("active_element",
+        selenium__active_element(to_json(Selenium::_with_session(%args, $sid))))
     $o->{element}
 }
 
@@ -338,6 +362,59 @@ fn Selenium::execute_script ($script, $args = undef, $sid = undef) {
     $o->{value}
 }
 
+## Run asynchronous JavaScript. The script is handed a completion callback as
+## its LAST argument (`arguments[arguments.length - 1]`); the value passed to
+## that callback becomes the return value. The call blocks until the callback
+## fires or the script timeout (Selenium::set_script_timeout) elapses. Element
+## args are wrapped as `{ __element__ => $eid }`, same as execute_script.
+##
+## Example:
+##   val $v = Selenium::execute_async_script(
+##       "const cb = arguments[arguments.length - 1]; setTimeout(() => cb(42), 100)")
+fn Selenium::execute_async_script ($script, $args = undef, $sid = undef) {
+    var %args = (script => $script)
+    $args{args} = $args if defined $args
+    val $o = Selenium::_decode("execute_async_script",
+        selenium__execute_async_script(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{value}
+}
+
+# ── action chains ───────────────────────────────────────────────────
+
+## Move the pointer to element $eid's center and left-click it. Use when a
+## plain Selenium::click is intercepted and a real pointer move is needed.
+fn Selenium::action_click ($eid, $sid = undef) {
+    var %args = (element => $eid)
+    Selenium::_decode("action_click",
+        selenium__action_click(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Move the pointer to element $eid's center and double-click it.
+fn Selenium::action_double_click ($eid, $sid = undef) {
+    var %args = (element => $eid)
+    Selenium::_decode("action_double_click",
+        selenium__action_double_click(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Move the pointer to element $eid's center and right-click (context-click) it.
+fn Selenium::action_context_click ($eid, $sid = undef) {
+    var %args = (element => $eid)
+    Selenium::_decode("action_context_click",
+        selenium__action_context_click(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Type $text against whatever element currently has focus, via a key-down /
+## key-up action sequence. Combine with Selenium::key_code chars for chords.
+fn Selenium::action_send_keys ($text, $sid = undef) {
+    var %args = (text => $text)
+    Selenium::_decode("action_send_keys",
+        selenium__action_send_keys(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
 # ── screenshots ─────────────────────────────────────────────────────
 
 ## Capture the page.
@@ -426,11 +503,62 @@ fn Selenium::switch_window ($handle, $sid = undef) {
     1
 }
 
+## Open a new top-level window, switch focus to it, and return its handle.
+fn Selenium::new_window ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("new_window",
+        selenium__new_window(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{handle}
+}
+
+## Open a new browser tab, switch focus to it, and return its handle.
+fn Selenium::new_tab ($sid = undef) {
+    var %args
+    val $o = Selenium::_decode("new_tab",
+        selenium__new_tab(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{handle}
+}
+
+## Close the current window/tab. Closes the whole session when no other
+## window remains — switch to a surviving handle first if you want to keep
+## driving the session.
+fn Selenium::close_window ($sid = undef) {
+    var %args
+    Selenium::_decode("close_window",
+        selenium__close_window(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Name the current window (sets window.name) so switch_to_named_window can
+## target it later.
+fn Selenium::set_window_name ($name, $sid = undef) {
+    var %args = (name => $name)
+    Selenium::_decode("set_window_name",
+        selenium__set_window_name(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Switch focus to a window/tab by the window.name set via set_window_name.
+fn Selenium::switch_to_named_window ($name, $sid = undef) {
+    var %args = (name => $name)
+    Selenium::_decode("switch_to_named_window",
+        selenium__switch_to_named_window(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
 ## Switch into an iframe by its element id.
 fn Selenium::switch_frame ($eid, $sid = undef) {
     var %args = (element => $eid)
     Selenium::_decode("switch_frame",
         selenium__switch_frame(to_json(Selenium::_with_session(%args, $sid))))
+    1
+}
+
+## Switch into an iframe by its zero-based index in the document.
+fn Selenium::switch_frame_number ($number, $sid = undef) {
+    var %args = (number => $number)
+    Selenium::_decode("switch_frame_number",
+        selenium__switch_frame_number(to_json(Selenium::_with_session(%args, $sid))))
     1
 }
 
@@ -458,6 +586,15 @@ fn Selenium::cookies ($sid = undef) {
     val $o = Selenium::_decode("cookies",
         selenium__cookies(to_json(Selenium::_with_session(%args, $sid))))
     $o->{cookies}
+}
+
+## Fetch a single cookie by name → a hashref, or die if no cookie with that
+## name is visible to the current page.
+fn Selenium::get_named_cookie ($name, $sid = undef) {
+    var %args = (name => $name)
+    val $o = Selenium::_decode("get_named_cookie",
+        selenium__get_named_cookie(to_json(Selenium::_with_session(%args, $sid))))
+    $o->{cookie}
 }
 
 ## Add a cookie. %fields: name (required), value (required), path, domain,

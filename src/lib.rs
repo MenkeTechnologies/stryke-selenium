@@ -17,6 +17,7 @@
 //! process (see `common.rs::runtime`), and lets `WebDriver` + `WebElement`
 //! handles persist across calls so the WebDriver session is built once.
 
+mod actions;
 mod capture;
 mod common;
 mod driver;
@@ -286,6 +287,20 @@ pub extern "C" fn selenium__set_script_timeout(args: *const c_char) -> *const c_
     })
 }
 
+#[no_mangle]
+pub extern "C" fn selenium__get_timeouts(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(serde_json::to_value(driver::get_timeouts(arg_session(
+            &v,
+        ))?)?)
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__status(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| driver::status(arg_session(&v)))
+}
+
 // ── element queries ────────────────────────────────────────────────────
 
 #[no_mangle]
@@ -316,6 +331,13 @@ pub extern "C" fn selenium__wait_for(args: *const c_char) -> *const c_char {
         let t = v["timeout"].as_f64().unwrap_or(10.0);
         let id = element::wait_for(arg_session(&v), &by, sel, t)?;
         Ok(json!({ "element": id }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__active_element(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "element": element::active_element(arg_session(&v))? }))
     })
 }
 
@@ -453,6 +475,55 @@ pub extern "C" fn selenium__execute_script(args: *const c_char) -> *const c_char
     })
 }
 
+#[no_mangle]
+pub extern "C" fn selenium__execute_async_script(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let code = arg_str(&v, "script")?.to_string();
+        let script_args: Vec<Value> = v
+            .get("args")
+            .and_then(|a| a.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let ret = script::execute_async_script(arg_session(&v), code, script_args)?;
+        Ok(json!({ "value": ret }))
+    })
+}
+
+// ── action chains ──────────────────────────────────────────────────────
+
+#[no_mangle]
+pub extern "C" fn selenium__action_click(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        actions::action_click(arg_session(&v), arg_element(&v, "element")?)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__action_double_click(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        actions::action_double_click(arg_session(&v), arg_element(&v, "element")?)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__action_context_click(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        actions::action_context_click(arg_session(&v), arg_element(&v, "element")?)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__action_send_keys(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let text = arg_str(&v, "text")?.to_string();
+        actions::action_send_keys(arg_session(&v), text)?;
+        Ok(json!({}))
+    })
+}
+
 // ── screenshots ────────────────────────────────────────────────────────
 
 #[no_mangle]
@@ -546,6 +617,60 @@ pub extern "C" fn selenium__switch_window(args: *const c_char) -> *const c_char 
 }
 
 #[no_mangle]
+pub extern "C" fn selenium__new_window(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "handle": window::new_window(arg_session(&v))? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__new_tab(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "handle": window::new_tab(arg_session(&v))? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__close_window(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        window::close_window(arg_session(&v))?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__switch_to_named_window(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let name = arg_str(&v, "name")?.to_string();
+        window::switch_to_named_window(arg_session(&v), name)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__set_window_name(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let name = arg_str(&v, "name")?.to_string();
+        window::set_window_name(arg_session(&v), name)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__switch_frame_number(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let number = v["number"]
+            .as_u64()
+            .ok_or_else(|| anyhow::anyhow!("switch_frame_number: missing 'number'"))?;
+        let number = u16::try_from(number).map_err(|_| {
+            anyhow::anyhow!("switch_frame_number: 'number' out of range (0..65535)")
+        })?;
+        window::switch_frame_number(arg_session(&v), number)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn selenium__switch_frame(args: *const c_char) -> *const c_char {
     ffi_call(args, |v| {
         window::switch_frame(arg_session(&v), arg_element(&v, "element")?)?;
@@ -575,6 +700,14 @@ pub extern "C" fn selenium__switch_parent_frame(args: *const c_char) -> *const c
 pub extern "C" fn selenium__cookies(args: *const c_char) -> *const c_char {
     ffi_call(args, |v| {
         Ok(json!({ "cookies": window::cookies(arg_session(&v))? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__get_named_cookie(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        let name = arg_str(&v, "name")?.to_string();
+        Ok(json!({ "cookie": window::get_named_cookie(arg_session(&v), name)? }))
     })
 }
 

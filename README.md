@@ -161,6 +161,8 @@ by `Selenium::open`. Omit it to use the active session.
 | `Selenium::set_implicit_wait($s, $sid?)` | Server-side implicit-wait timeout. |
 | `Selenium::set_page_load_timeout($s, $sid?)` | |
 | `Selenium::set_script_timeout($s, $sid?)` | |
+| `Selenium::get_timeouts($sid?)` | `→ { script, page_load, implicit }` in seconds (a field is `undef` when unset) |
+| `Selenium::status($sid?)` | `→ { ready, message }` WebDriver server status |
 
 ### Element queries
 
@@ -169,6 +171,7 @@ by `Selenium::open`. Omit it to use the active session.
 | `Selenium::find($sel, $by="css", $sid?)` | Returns one element id, or dies. |
 | `Selenium::find_all($sel, $by="css", $sid?)` | Returns a list of ids. |
 | `Selenium::wait_for($sel, $by="css", $timeout=10, $sid?)` | Polls every 200 ms until found or timeout. |
+| `Selenium::active_element($sid?)` | Element id of `document.activeElement` (the focused element). |
 
 `$by` values: `css` (default), `id`, `name`, `xpath`, `tag`, `class`,
 `link_text`, `partial_link_text`. Each has short aliases — see
@@ -195,6 +198,18 @@ by `Selenium::open`. Omit it to use the active session.
 | Function | Notes |
 |----------|-------|
 | `Selenium::execute_script($js, $args?, $sid?)` | Runs `$js` with `$args` as `arguments[0..N]`. Returns whatever `return ...` produced, parsed from JSON. To pass a Selenium element, wrap: `{ __element__ => $eid }`. |
+| `Selenium::execute_async_script($js, $args?, $sid?)` | Async variant: `$js` gets a completion callback as its last argument (`arguments[arguments.length - 1]`); the value passed to it is the return. Blocks until the callback fires or the script timeout elapses. |
+
+### Action chains
+
+Low-level pointer/keyboard sequences for cases a plain `click`/`send_keys` can't express.
+
+| Function | Notes |
+|----------|-------|
+| `Selenium::action_click($eid, $sid?)` | move pointer to the element's center, then left-click (defeats click interceptors) |
+| `Selenium::action_double_click($eid, $sid?)` | move + double-click |
+| `Selenium::action_context_click($eid, $sid?)` | move + right-click (context menu) |
+| `Selenium::action_send_keys($text, $sid?)` | type against the focused element via a key-down/key-up sequence |
 
 ### Screenshots
 
@@ -216,7 +231,13 @@ by `Selenium::open`. Omit it to use the active session.
 | `Selenium::window_handles($sid?)` | every tab/window handle |
 | `Selenium::current_window($sid?)` | handle of focused tab |
 | `Selenium::switch_window($handle, $sid?)` | |
+| `Selenium::new_window($sid?)` | open a new top-level window, switch to it, return its handle |
+| `Selenium::new_tab($sid?)` | open a new tab, switch to it, return its handle |
+| `Selenium::close_window($sid?)` | close the current window/tab (closes the session if it's the last one) |
+| `Selenium::set_window_name($name, $sid?)` | set `window.name` for later `switch_to_named_window` |
+| `Selenium::switch_to_named_window($name, $sid?)` | switch by the `window.name` set above |
 | `Selenium::switch_frame($eid, $sid?)` | enter iframe by element |
+| `Selenium::switch_frame_number($n, $sid?)` | enter iframe by zero-based index |
 | `Selenium::switch_default_content($sid?)` | back to top |
 | `Selenium::switch_parent_frame($sid?)` | one level out |
 | `Selenium::maximize($sid?)` | maximize the window |
@@ -237,6 +258,7 @@ by `Selenium::open`. Omit it to use the active session.
 | Function | Notes |
 |----------|-------|
 | `Selenium::cookies($sid?)` | arrayref of cookie hashes |
+| `Selenium::get_named_cookie($name, $sid?)` | one cookie hash by name, or dies if absent |
 | `Selenium::add_cookie(%fields)` | name + value required; path, domain, secure, http_only, same_site, expiry optional |
 | `Selenium::delete_cookie($name, $sid?)` | |
 | `Selenium::delete_all_cookies($sid?)` | |
@@ -370,9 +392,10 @@ src/
   common.rs             tokio runtime + session + element registries
   driver.rs             open / quit / navigation / locator parsing
   element.rs            find / wait_for / click / text / attr / ...
-  script.rs             execute_script with WebElement arg unmarshaling
+  script.rs             execute_script / execute_async_script with WebElement arg unmarshaling
+  actions.rs            action-chain pointer/keyboard sequences (click / double / context / send_keys)
   capture.rs            page + per-element screenshots
-  window.rs             window rects / handles / frames / cookies
+  window.rs             window rects / handles / new-window / frames / cookies
 lib/Selenium.stk        stryke wrappers (JSON args → FFI symbol → JSON return)
 examples/               runnable demos
 t/test_selenium.stk     plumbing tests (permission-free FFI surface)

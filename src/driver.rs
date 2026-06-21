@@ -1,6 +1,7 @@
 //! Browser launch / teardown + navigation + locator parsing.
 
 use anyhow::{anyhow, Result};
+use serde::Serialize;
 use thirtyfour::prelude::*;
 use thirtyfour::ChromiumLikeCapabilities;
 
@@ -8,6 +9,15 @@ use crate::common::{
     block_on, drain_sessions, register_session, resolve_session, take_session,
     DEFAULT_WEBDRIVER_URL,
 };
+
+/// The three WebDriver timeout values, in seconds, as the server currently
+/// has them. A field is `null` when the server reports no value for it.
+#[derive(Serialize)]
+pub struct Timeouts {
+    pub script: Option<f64>,
+    pub page_load: Option<f64>,
+    pub implicit: Option<f64>,
+}
 
 /// Open a new WebDriver session. `browser` selects the capabilities table
 /// (chrome / firefox / safari / edge). `url` overrides the default
@@ -235,6 +245,37 @@ pub fn set_script_timeout(id: Option<u64>, seconds: f64) -> Result<()> {
     })
 }
 
+/// Read the three WebDriver timeouts (script / page-load / implicit) the
+/// server currently has set, in seconds.
+pub fn get_timeouts(id: Option<u64>) -> Result<Timeouts> {
+    let drv = resolve_session(id)?;
+    block_on(async move {
+        let t = drv
+            .get_timeouts()
+            .await
+            .map_err(|e| anyhow!("get_timeouts failed: {e}"))?;
+        let secs = |d: Option<std::time::Duration>| d.map(|d| d.as_secs_f64());
+        Ok(Timeouts {
+            script: secs(t.script()),
+            page_load: secs(t.page_load()),
+            implicit: secs(t.implicit()),
+        })
+    })
+}
+
+/// WebDriver server status — `{ready, message}`. `ready` is whether the
+/// server can accept a new session.
+pub fn status(id: Option<u64>) -> Result<serde_json::Value> {
+    let drv = resolve_session(id)?;
+    block_on(async move {
+        let s = drv
+            .status()
+            .await
+            .map_err(|e| anyhow!("status failed: {e}"))?;
+        Ok(serde_json::json!({ "ready": s.ready, "message": s.message }))
+    })
+}
+
 /// Map a stryke-side locator strategy name to a thirtyfour `By` variant.
 /// Built inline at the call site so the selector string's lifetime is
 /// bounded by the surrounding async block — no per-call `Box::leak`.
@@ -271,6 +312,24 @@ mod tests {
     // that swaps the variant or mangles the selector would change this string.
     fn rendered(strategy: &str, selector: &str) -> String {
         format!("{}", by_from(strategy, selector.to_string()).unwrap())
+    }
+
+    #[test]
+    fn timeouts_serializes_with_three_keys_and_nulls() {
+        // The .stk wrapper reads {script, page_load, implicit}; pin those exact
+        // keys and that an unset value serializes as JSON null (not omitted),
+        // so `Selenium::get_timeouts()->{implicit}` is reliably undef-or-number.
+        let t = Timeouts {
+            script: Some(30.0),
+            page_load: None,
+            implicit: Some(0.0),
+        };
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&t).unwrap()).unwrap();
+        assert_eq!(v["script"], 30.0);
+        assert!(v["page_load"].is_null());
+        assert_eq!(v["implicit"], 0.0);
+        assert_eq!(v.as_object().unwrap().len(), 3);
     }
 
     #[test]

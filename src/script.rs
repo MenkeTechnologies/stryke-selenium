@@ -45,6 +45,40 @@ pub fn execute_script(session: Option<u64>, script: String, args: Vec<Value>) ->
     })
 }
 
+/// Run an asynchronous script. The script is handed a callback as its LAST
+/// argument (`arguments[arguments.length - 1]`); the value it passes to that
+/// callback becomes the return value, and the call blocks until the callback
+/// fires or the session's script timeout (see `Selenium::set_script_timeout`)
+/// elapses. Element references in `args` are resolved exactly as
+/// `execute_script` does.
+pub fn execute_async_script(
+    session: Option<u64>,
+    script: String,
+    args: Vec<Value>,
+) -> Result<Value> {
+    let drv = resolve_session(session)?;
+    let mut prepared: Vec<Value> = Vec::with_capacity(args.len());
+    for a in args {
+        match element_ref_id(&a) {
+            Some(id) => {
+                let elem = get_element(id)?;
+                prepared.push(
+                    serde_json::to_value(&elem)
+                        .map_err(|e| anyhow!("element serialize failed: {e}"))?,
+                );
+            }
+            None => prepared.push(a),
+        }
+    }
+    block_on(async move {
+        let ret = drv
+            .execute_async(&script, prepared)
+            .await
+            .map_err(|e| anyhow!("execute_async_script failed: {e}"))?;
+        Ok(ret.json().clone())
+    })
+}
+
 /// Detect a stryke-side element reference: a JSON object of the form
 /// `{"__element__": <id>}`. The double-underscore prefix matches Python's
 /// "this isn't your business" naming convention and is exceptionally

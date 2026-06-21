@@ -122,6 +122,82 @@ pub fn switch_window(session: Option<u64>, handle: String) -> Result<()> {
     })
 }
 
+/// Open a new top-level window and switch focus to it. Returns the new
+/// window's handle (already the current one after this call).
+pub fn new_window(session: Option<u64>) -> Result<String> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        let h = drv
+            .new_window()
+            .await
+            .map_err(|e| anyhow!("new_window failed: {e}"))?;
+        drv.switch_to_window(h.clone())
+            .await
+            .map_err(|e| anyhow!("new_window: switch failed: {e}"))?;
+        Ok(h.to_string())
+    })
+}
+
+/// Open a new browser tab and switch focus to it. Returns the new tab's
+/// handle (already the current one after this call).
+pub fn new_tab(session: Option<u64>) -> Result<String> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        let h = drv
+            .new_tab()
+            .await
+            .map_err(|e| anyhow!("new_tab failed: {e}"))?;
+        drv.switch_to_window(h.clone())
+            .await
+            .map_err(|e| anyhow!("new_tab: switch failed: {e}"))?;
+        Ok(h.to_string())
+    })
+}
+
+/// Close the current window/tab. Per the W3C spec this closes the whole
+/// session when no other window remains; the caller is responsible for
+/// switching to a surviving handle afterward.
+pub fn close_window(session: Option<u64>) -> Result<()> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        drv.close_window()
+            .await
+            .map_err(|e| anyhow!("close_window failed: {e}"))
+    })
+}
+
+/// Switch focus to a window/tab by the `window.name` set via
+/// `set_window_name`.
+pub fn switch_to_named_window(session: Option<u64>, name: String) -> Result<()> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        drv.switch_to_named_window(&name)
+            .await
+            .map_err(|e| anyhow!("switch_to_named_window({name}) failed: {e}"))
+    })
+}
+
+/// Assign `window.name` to the current window so `switch_to_named_window`
+/// can target it later.
+pub fn set_window_name(session: Option<u64>, name: String) -> Result<()> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        drv.set_window_name(&name)
+            .await
+            .map_err(|e| anyhow!("set_window_name({name}) failed: {e}"))
+    })
+}
+
+/// Switch into an iframe by its zero-based index in the document.
+pub fn switch_frame_number(session: Option<u64>, number: u16) -> Result<()> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        drv.enter_frame(number)
+            .await
+            .map_err(|e| anyhow!("switch_frame_number({number}) failed: {e}"))
+    })
+}
+
 pub fn switch_frame(session: Option<u64>, element_id: u64) -> Result<()> {
     let _drv = resolve_session(session)?;
     let elem = get_element(element_id)?;
@@ -160,6 +236,19 @@ pub fn cookies(session: Option<u64>) -> Result<Value> {
             .await
             .map_err(|e| anyhow!("cookies failed: {e}"))?;
         serde_json::to_value(&cs).map_err(|e| anyhow!("cookies serialize: {e}"))
+    })
+}
+
+/// Fetch a single cookie by name → its serialized form, or an error if no
+/// cookie with that name is visible to the current page.
+pub fn get_named_cookie(session: Option<u64>, name: String) -> Result<Value> {
+    let drv = resolve_session(session)?;
+    block_on(async move {
+        let c = drv
+            .get_named_cookie(&name)
+            .await
+            .map_err(|e| anyhow!("get_named_cookie({name}) failed: {e}"))?;
+        serde_json::to_value(&c).map_err(|e| anyhow!("get_named_cookie serialize: {e}"))
     })
 }
 
