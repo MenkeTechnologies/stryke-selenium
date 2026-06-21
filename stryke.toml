@@ -102,6 +102,14 @@ exports = [
     "selenium__build_css_selector",
     "selenium__parse_css_selector",
     "selenium__build_xpath",
+    "selenium__element_class_name",
+    "selenium__element_focus",
+    "selenium__element_inner_html",
+    "selenium__element_is_clickable",
+    "selenium__element_is_present",
+    "selenium__element_outer_html",
+    "selenium__element_parent",
+    "selenium__element_value",
 ]
 
 # Installable smoke-test launcher. `s pkg install -g` writes
