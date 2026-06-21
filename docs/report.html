@@ -101,6 +101,8 @@
         <div class="stat-card"><div class="stat-val cyan">opt-in</div><div class="stat-label">Tier</div></div>
         <div class="stat-card"><div class="stat-val">cdylib</div><div class="stat-label">Loader (dlopen)</div></div>
         <div class="stat-card"><div class="stat-val green">thirtyfour + tokio</div><div class="stat-label">WebDriver client</div></div>
+        <div class="stat-card"><div class="stat-val cyan">102</div><div class="stat-label">Selenium:: functions</div></div>
+        <div class="stat-card"><div class="stat-val">99</div><div class="stat-label">selenium__* FFI exports</div></div>
         <div class="stat-card"><div class="stat-val">4</div><div class="stat-label">Browsers (chrome / firefox / safari / edge)</div></div>
         <div class="stat-card"><div class="stat-val">8</div><div class="stat-label">Locator strategies</div></div>
         <div class="stat-card"><div class="stat-val cyan">rustls-tls</div><div class="stat-label">Zero OpenSSL deps</div></div>
@@ -120,7 +122,7 @@
           <tr><td>Element registry (<code>src/common.rs</code>)</td><td><code>OnceCell&lt;Mutex&lt;HashMap&lt;u64, WebElement&gt;&gt;&gt;</code> &mdash; same shape; the cdylib never re-finds an element a script already has a handle to</td></tr>
           <tr><td>WebDriver client</td><td><code>thirtyfour</code> 0.35 with <code>rustls-tls</code> &mdash; pure-Rust TLS so the cdylib doesn't drag the openssl system library into the build matrix</td></tr>
           <tr><td>Async runtime</td><td><code>tokio</code> 1.x (multi-thread, <code>rt-multi-thread</code> + <code>macros</code> + <code>time</code>)</td></tr>
-          <tr><td>Install path</td><td><code>s pkg install -g github.com/MenkeTechnologies/stryke-selenium</code> &mdash; fetches prebuilt cdylib tarball for host triple from GitHub Releases, verifies SHA-256, extracts into <code>~/.stryke/store/selenium@&lt;version&gt;/</code></td></tr>
+          <tr><td>Install path</td><td><code>s pkg install -g github.com/MenkeTechnologies/stryke-selenium</code> &mdash; fetches prebuilt cdylib tarball for host triple from GitHub Releases, verifies SHA-256, extracts into <code>~/.stryke/store/stryke-selenium@&lt;version&gt;/</code></td></tr>
           <tr><td>Tests</td><td>Cargo unit tests under <code>src/</code> (FFI plumbing, JSON-shape coverage, registry round-trips) plus <code>t/test_selenium.stk</code> for end-to-end FFI dispatch via permission-free queries (<code>supported_browsers</code>, <code>locator_strategies</code>, <code>sessions</code>)</td></tr>
           <tr><td>CI</td><td>GitHub Actions <code>.github/workflows/ci.yml</code> &mdash; cargo check + clippy (<code>-D warnings</code>) + fmt + test + doc on ubuntu + macos</td></tr>
           <tr><td>Release</td><td>GitHub Actions <code>.github/workflows/release.yml</code> &mdash; per-triple cdylib build matrix on tag push; uploads <code>.tar.gz</code> + <code>.sha256</code> to GitHub Release</td></tr>
@@ -161,6 +163,17 @@
           <tr><td><code>selenium__switch_window</code></td><td><code>{session?, handle} &rarr; {}</code></td></tr>
           <tr><td><code>selenium__cookies</code></td><td><code>{session?} &rarr; {cookies: [Value]}</code></td></tr>
           <tr><td><code>selenium__add_cookie</code></td><td><code>{session?, cookie: {name, value, &hellip;}} &rarr; {}</code></td></tr>
+          <tr><td><code>selenium__execute_async_script</code></td><td><code>{session?, script, args: [Value]} &rarr; {value: Value}</code> &mdash; callback-completed</td></tr>
+          <tr><td><code>selenium__action_click</code></td><td><code>{session?, element} &rarr; {}</code> &mdash; pointer move + left-click</td></tr>
+          <tr><td><code>selenium__action_double_click</code></td><td><code>{session?, element} &rarr; {}</code></td></tr>
+          <tr><td><code>selenium__action_context_click</code></td><td><code>{session?, element} &rarr; {}</code> &mdash; right-click</td></tr>
+          <tr><td><code>selenium__action_send_keys</code></td><td><code>{session?, text} &rarr; {}</code> &mdash; key-down/up sequence</td></tr>
+          <tr><td><code>selenium__print_page</code></td><td><code>{session?, output} &rarr; {path}</code> &mdash; page to PDF</td></tr>
+          <tr><td><code>selenium__accept_alert</code></td><td><code>{session?} &rarr; {}</code></td></tr>
+          <tr><td><code>selenium__dismiss_alert</code></td><td><code>{session?} &rarr; {}</code></td></tr>
+          <tr><td><code>selenium__alert_text</code></td><td><code>{session?} &rarr; {text: string}</code></td></tr>
+          <tr><td><code>selenium__send_alert_text</code></td><td><code>{session?, text} &rarr; {}</code></td></tr>
+          <tr><td><code>selenium__get_named_cookie</code></td><td><code>{session?, name} &rarr; {cookie: Value}</code></td></tr>
           <tr><td><code>selenium__supported_browsers</code></td><td><code>{} &rarr; [string]</code></td></tr>
           <tr><td><code>selenium__locator_strategies</code></td><td><code>{} &rarr; [string]</code></td></tr>
         </tbody>
@@ -172,7 +185,9 @@
       <p>The surface is a selenium-python-equivalent &mdash; the same shape ports directly with <code>Selenium::</code> in place of <code>webdriver.</code>. Coordinates use the WebDriver spec's top-left origin. Locator strategies (<code>css</code>, <code>id</code>, <code>name</code>, <code>xpath</code>, <code>tag</code>, <code>class</code>, <code>link_text</code>, <code>partial_link_text</code>) map 1:1 to thirtyfour's <code>By::*</code> arms.</p>
       <p><code>wait_for</code> polls every 200 ms &mdash; same default as selenium-python's <code>WebDriverWait</code>. Implicit-wait, page-load, and script timeouts are also exposed (<code>set_implicit_wait</code>, <code>set_page_load_timeout</code>, <code>set_script_timeout</code>) and apply server-side.</p>
       <p>Multi-browser is first-class: every <code>Selenium::open()</code> returns a fresh integer session id. The first open is set as the active session; subsequent calls without an explicit <code>$sid</code> arg route to it. Cross-session work threads <code>$sid</code> as the trailing argument (mirrors how Python's <code>webdriver.Chrome()</code> instances are passed around).</p>
-      <p>See the <a href="https://github.com/MenkeTechnologies/stryke-selenium#0x03-api-reference">README API reference</a> for the authoritative function list.</p>
+      <p>Beyond the basic <code>click</code>/<code>send_keys</code> path, action chains (<code>action_click</code>, <code>action_double_click</code>, <code>action_context_click</code>, <code>action_send_keys</code> in <code>src/actions.rs</code>) drive pointer/keyboard sequences for cases plain element ops can't express &mdash; a pointer move to the element's center before clicking defeats overlay click-interceptors, and right-click opens a native context menu. Alert handling (<code>accept_alert</code> / <code>dismiss_alert</code> / <code>alert_text</code> / <code>send_alert_text</code>) covers <code>alert</code>/<code>confirm</code>/<code>prompt</code> dialogs. Async JavaScript via <code>execute_async_script</code> blocks until the script invokes its injected completion callback or the script timeout elapses.</p>
+      <p>A second surface needs no browser at all: the pure helpers parse / build / validate locators (<code>parse_locator</code>, <code>build_locator</code>, <code>locator_to_w3c</code>, <code>w3c_to_locator</code>, <code>valid_locator_strategy</code>), cookies (<code>parse_cookie</code>, <code>build_cookie</code>, <code>cookie_domain_matches</code> / <code>cookie_path_matches</code> per RFC 6265), CSS selectors (<code>css_escape</code> / <code>css_unescape</code> / <code>css_escape_string</code> / <code>build_css_selector</code> / <code>parse_css_selector</code>), XPath literals (<code>build_xpath</code>, <code>xpath_literal</code>), and WebDriver special-key code points (<code>key_code</code> / <code>key_name</code>). These run without opening a session, so they execute unattended in CI alongside the static-dispatch queries.</p>
+      <p>See the <a href="https://github.com/MenkeTechnologies/stryke-selenium#0x03-api-reference">README API reference</a> for the authoritative function list. The stryke side exposes <strong>102</strong> <code>Selenium::</code> functions over <strong>99</strong> <code>selenium__*</code> cdylib exports (the extra stryke-side functions are aliases such as <code>get</code>&rarr;<code>goto</code> and convenience wrappers like <code>set_window_size</code> / <code>set_window_position</code> that re-shape arguments to a shared export).</p>
 
       <hr class="section-rule">
       <h2 class="tutorial-title"><span class="step-hash">!</span>WEBDRIVER SERVER REQUIREMENTS</h2>

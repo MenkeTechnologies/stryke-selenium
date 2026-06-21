@@ -116,7 +116,7 @@
 <pre>s pkg install -g github.com/MenkeTechnologies/stryke-selenium</pre>
         <p>Pin a specific release:</p>
 <pre>s pkg install -g github.com/MenkeTechnologies/stryke-selenium@v0.17.0</pre>
-        <p>This fetches the prebuilt tarball for your host triple (<code>aarch64-apple-darwin</code>, <code>x86_64-apple-darwin</code>, <code>x86_64-unknown-linux-gnu</code>, <code>aarch64-unknown-linux-gnu</code>), verifies its SHA-256, extracts into <code>~/.stryke/store/selenium@&lt;version&gt;/</code>, and registers the cdylib for <code>use Selenium</code>. No <code>cargo</code>, no <code>rustc</code>, no per-target build step on the user's machine.</p>
+        <p>This fetches the prebuilt tarball for your host triple (<code>aarch64-apple-darwin</code>, <code>x86_64-apple-darwin</code>, <code>x86_64-unknown-linux-gnu</code>, <code>aarch64-unknown-linux-gnu</code>), verifies its SHA-256, extracts into <code>~/.stryke/store/stryke-selenium@&lt;version&gt;/</code>, and registers the cdylib for <code>use Selenium</code>. No <code>cargo</code>, no <code>rustc</code>, no per-target build step on the user's machine.</p>
         <p>You also need a WebDriver server (chromedriver / geckodriver / safaridriver) running &mdash; see the <a href="#webdriver">WebDriver server</a> section below.</p>
       </section>
 
@@ -149,26 +149,172 @@ Selenium::quit()</pre>
 
       <section class="tutorial-section">
         <h2>API: <code>Selenium::*</code></h2>
+        <p>Every function lives in the <code>Selenium::</code> namespace (<code>use Selenium</code>). The last optional argument on most browser-bound calls is <code>$sid</code> &mdash; the session id returned by <code>Selenium::open</code>. Omit it to use the active session. Element ops take the element id <code>$eid</code> returned by <code>find</code> / <code>find_all</code> / <code>wait_for</code>. The pure helpers at the end open no browser session at all &mdash; they are string parsing / validation that runs without a WebDriver server.</p>
+
+        <h3>Session lifecycle</h3>
         <table class="example-tbl">
           <tbody>
-            <tr><td>launch browser, get session id</td><td><code>Selenium::open(browser =&gt; "chrome", headless =&gt; 1)</code></td></tr>
-            <tr><td>navigate</td><td><code>Selenium::goto($url)</code> &middot; <code>Selenium::get($url)</code></td></tr>
-            <tr><td>current page metadata</td><td><code>Selenium::title()</code> &middot; <code>Selenium::current_url()</code> &middot; <code>Selenium::source()</code></td></tr>
-            <tr><td>find one element</td><td><code>Selenium::find("css selector")</code> &mdash; returns element id</td></tr>
-            <tr><td>find every match</td><td><code>Selenium::find_all("a", "tag")</code> &mdash; returns list of ids</td></tr>
-            <tr><td>wait until present</td><td><code>Selenium::wait_for("#late", "css", 10)</code> &mdash; 10s timeout, 200 ms poll</td></tr>
-            <tr><td>click / type / clear</td><td><code>Selenium::click($eid)</code> &middot; <code>Selenium::send_keys($eid, "hi")</code> &middot; <code>Selenium::clear($eid)</code></td></tr>
-            <tr><td>inspect element</td><td><code>Selenium::text($eid)</code> &middot; <code>Selenium::attr($eid, "href")</code> &middot; <code>Selenium::tag($eid)</code> &middot; <code>Selenium::rect($eid)</code></td></tr>
-            <tr><td>run JavaScript</td><td><code>Selenium::execute_script("return navigator.userAgent")</code></td></tr>
-            <tr><td>pass element to JS</td><td><code>Selenium::execute_script("return arguments[0].tagName", [{ __element__ =&gt; $eid }])</code></td></tr>
-            <tr><td>screenshot</td><td><code>Selenium::screenshot("/tmp/p.png")</code> &middot; <code>Selenium::element_screenshot($eid, "/tmp/e.png")</code></td></tr>
-            <tr><td>windows / tabs</td><td><code>Selenium::window_handles()</code> &middot; <code>Selenium::switch_window($h)</code></td></tr>
-            <tr><td>frames</td><td><code>Selenium::switch_frame($eid)</code> &middot; <code>Selenium::switch_default_content()</code></td></tr>
-            <tr><td>cookies</td><td><code>Selenium::cookies()</code> &middot; <code>Selenium::add_cookie(name =&gt; ..., value =&gt; ...)</code></td></tr>
-            <tr><td>multi-browser</td><td><code>val $a = Selenium::open()</code> &middot; <code>Selenium::title($a)</code></td></tr>
+            <tr><td><code>Selenium::open(%opts)</code></td><td><code>browser</code> (chrome/firefox/safari/edge, default chrome), <code>url</code> (WebDriver server URL, default <code>http://localhost:9515</code>), <code>headless</code> (1/0, default 0). Returns the session id.</td></tr>
+            <tr><td><code>Selenium::quit($sid?)</code></td><td>Close one session.</td></tr>
+            <tr><td><code>Selenium::quit_all()</code></td><td>Close every open session. Returns count closed.</td></tr>
+            <tr><td><code>Selenium::sessions()</code></td><td>List of open session ids.</td></tr>
+            <tr><td><code>Selenium::active()</code></td><td>Active session id, or <code>undef</code>.</td></tr>
+            <tr><td><code>Selenium::set_active($sid)</code></td><td>Set the active session.</td></tr>
+            <tr><td><code>Selenium::supported_browsers()</code></td><td><code>("chrome", "firefox", "safari", "edge")</code></td></tr>
+            <tr><td><code>Selenium::locator_strategies()</code></td><td>Every name accepted as <code>$by</code>.</td></tr>
           </tbody>
         </table>
-        <p>The full function list lives in the <a href="https://github.com/MenkeTechnologies/stryke-selenium#0x03-api-reference">README API reference</a>.</p>
+
+        <h3>Navigation &amp; timeouts</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::goto($url, $sid?)</code> &middot; <code>Selenium::get(...)</code></td><td>Navigate.</td></tr>
+            <tr><td><code>Selenium::current_url($sid?)</code></td><td>Current URL.</td></tr>
+            <tr><td><code>Selenium::title($sid?)</code></td><td>Document title.</td></tr>
+            <tr><td><code>Selenium::source($sid?)</code></td><td>Full HTML.</td></tr>
+            <tr><td><code>Selenium::back($sid?)</code> &middot; <code>forward</code> &middot; <code>refresh</code></td><td>History navigation.</td></tr>
+            <tr><td><code>Selenium::set_implicit_wait($s, $sid?)</code></td><td>Server-side implicit-wait timeout.</td></tr>
+            <tr><td><code>Selenium::set_page_load_timeout($s, $sid?)</code></td><td>Page-load timeout.</td></tr>
+            <tr><td><code>Selenium::set_script_timeout($s, $sid?)</code></td><td>Script timeout.</td></tr>
+            <tr><td><code>Selenium::get_timeouts($sid?)</code></td><td>&rarr; <code>{ script, page_load, implicit }</code> in seconds (a field is <code>undef</code> when unset).</td></tr>
+            <tr><td><code>Selenium::status($sid?)</code></td><td>&rarr; <code>{ ready, message }</code> WebDriver server status.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Element queries</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::find($sel, $by="css", $sid?)</code></td><td>Returns one element id, or dies.</td></tr>
+            <tr><td><code>Selenium::find_all($sel, $by="css", $sid?)</code></td><td>Returns a list of ids.</td></tr>
+            <tr><td><code>Selenium::wait_for($sel, $by="css", $timeout=10, $sid?)</code></td><td>Polls every 200 ms until found or timeout.</td></tr>
+            <tr><td><code>Selenium::active_element($sid?)</code></td><td>Element id of <code>document.activeElement</code> (the focused element).</td></tr>
+          </tbody>
+        </table>
+        <p><code>$by</code> values: <code>css</code> (default), <code>id</code>, <code>name</code>, <code>xpath</code>, <code>tag</code>, <code>class</code>, <code>link_text</code>, <code>partial_link_text</code>. Each has short aliases (<code>css_selector</code>, <code>tag_name</code>, <code>class_name</code>, <code>link</code>, <code>plink</code>) &mdash; see <code>Selenium::locator_strategies()</code>.</p>
+
+        <h3>Element ops</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::click($eid)</code></td><td>Click the element.</td></tr>
+            <tr><td><code>Selenium::send_keys($eid, $text)</code></td><td>Type into the element.</td></tr>
+            <tr><td><code>Selenium::clear($eid)</code></td><td>Clear a form field.</td></tr>
+            <tr><td><code>Selenium::text($eid)</code></td><td>Visible text.</td></tr>
+            <tr><td><code>Selenium::attr($eid, $name)</code></td><td>HTML attribute or <code>undef</code>.</td></tr>
+            <tr><td><code>Selenium::prop($eid, $name)</code></td><td>Live DOM property.</td></tr>
+            <tr><td><code>Selenium::css($eid, $name)</code></td><td>Resolved CSS value.</td></tr>
+            <tr><td><code>Selenium::tag($eid)</code></td><td>Lowercase tag name.</td></tr>
+            <tr><td><code>Selenium::class_name($eid)</code></td><td><code>class</code> attribute as one string, or <code>undef</code>.</td></tr>
+            <tr><td><code>Selenium::value($eid)</code></td><td>Live <code>value</code> DOM property (form fields), or <code>undef</code>.</td></tr>
+            <tr><td><code>Selenium::inner_html($eid)</code></td><td><code>innerHTML</code> (children markup).</td></tr>
+            <tr><td><code>Selenium::outer_html($eid)</code></td><td><code>outerHTML</code> (own tag + children).</td></tr>
+            <tr><td><code>Selenium::parent($eid)</code></td><td>Parent node &rarr; a fresh element id.</td></tr>
+            <tr><td><code>Selenium::rect($eid)</code></td><td><code>($x, $y, $w, $h)</code>.</td></tr>
+            <tr><td><code>Selenium::is_displayed($eid)</code> &middot; <code>is_enabled</code> &middot; <code>is_selected</code></td><td><code>1</code> / <code>0</code>.</td></tr>
+            <tr><td><code>Selenium::is_clickable($eid)</code></td><td><code>1</code>/<code>0</code> &mdash; displayed <strong>and</strong> enabled.</td></tr>
+            <tr><td><code>Selenium::is_present($eid)</code></td><td><code>1</code>/<code>0</code> &mdash; handle still attached (not stale).</td></tr>
+            <tr><td><code>Selenium::focus($eid)</code></td><td>Focus the element via DOM <code>focus()</code> (no click).</td></tr>
+            <tr><td><code>Selenium::drop($eid)</code></td><td>Drop the client-side handle.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>JavaScript</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::execute_script($js, $args?, $sid?)</code></td><td>Runs <code>$js</code> with <code>$args</code> as <code>arguments[0..N]</code>. Returns whatever <code>return ...</code> produced, parsed from JSON. To pass a Selenium element, wrap: <code>{ __element__ =&gt; $eid }</code>.</td></tr>
+            <tr><td><code>Selenium::execute_async_script($js, $args?, $sid?)</code></td><td>Async variant: <code>$js</code> gets a completion callback as its last argument (<code>arguments[arguments.length - 1]</code>); the value passed to it is the return. Blocks until the callback fires or the script timeout elapses.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Action chains</h3>
+        <p>Low-level pointer/keyboard sequences for cases a plain <code>click</code>/<code>send_keys</code> can't express.</p>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::action_click($eid, $sid?)</code></td><td>Move pointer to the element's center, then left-click (defeats click interceptors).</td></tr>
+            <tr><td><code>Selenium::action_double_click($eid, $sid?)</code></td><td>Move + double-click.</td></tr>
+            <tr><td><code>Selenium::action_context_click($eid, $sid?)</code></td><td>Move + right-click (context menu).</td></tr>
+            <tr><td><code>Selenium::action_send_keys($text, $sid?)</code></td><td>Type against the focused element via a key-down/key-up sequence.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Screenshots &amp; scrolling</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::screenshot($path?, $sid?)</code></td><td><code>$path</code> if given, else <code>\@png_bytes</code>.</td></tr>
+            <tr><td><code>Selenium::element_screenshot($eid, $path?)</code></td><td>Same shape, scoped to one element.</td></tr>
+            <tr><td><code>Selenium::print_page($path, $sid?)</code></td><td>Writes the page as PDF, returns <code>$path</code>.</td></tr>
+            <tr><td><code>Selenium::scroll_to_element($eid)</code></td><td>Scroll element into the viewport.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Window / frame</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::window_rect($sid?)</code></td><td><code>($x, $y, $w, $h)</code>.</td></tr>
+            <tr><td><code>Selenium::set_window_rect($x?, $y?, $w?, $h?, $sid?)</code></td><td>Partial accepted.</td></tr>
+            <tr><td><code>Selenium::set_window_size($w, $h, $sid?)</code></td><td>Keeps position.</td></tr>
+            <tr><td><code>Selenium::set_window_position($x, $y, $sid?)</code></td><td>Keeps size.</td></tr>
+            <tr><td><code>Selenium::window_handles($sid?)</code></td><td>Every tab/window handle.</td></tr>
+            <tr><td><code>Selenium::current_window($sid?)</code></td><td>Handle of focused tab.</td></tr>
+            <tr><td><code>Selenium::switch_window($handle, $sid?)</code></td><td>Switch by handle.</td></tr>
+            <tr><td><code>Selenium::new_window($sid?)</code></td><td>Open a new top-level window, switch to it, return its handle.</td></tr>
+            <tr><td><code>Selenium::new_tab($sid?)</code></td><td>Open a new tab, switch to it, return its handle.</td></tr>
+            <tr><td><code>Selenium::close_window($sid?)</code></td><td>Close the current window/tab (closes the session if it's the last one).</td></tr>
+            <tr><td><code>Selenium::set_window_name($name, $sid?)</code></td><td>Set <code>window.name</code> for later <code>switch_to_named_window</code>.</td></tr>
+            <tr><td><code>Selenium::switch_to_named_window($name, $sid?)</code></td><td>Switch by the <code>window.name</code> set above.</td></tr>
+            <tr><td><code>Selenium::switch_frame($eid, $sid?)</code></td><td>Enter iframe by element.</td></tr>
+            <tr><td><code>Selenium::switch_frame_number($n, $sid?)</code></td><td>Enter iframe by zero-based index.</td></tr>
+            <tr><td><code>Selenium::switch_default_content($sid?)</code></td><td>Back to top.</td></tr>
+            <tr><td><code>Selenium::switch_parent_frame($sid?)</code></td><td>One level out.</td></tr>
+            <tr><td><code>Selenium::maximize($sid?)</code> &middot; <code>minimize</code> &middot; <code>fullscreen</code></td><td>Window state.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Alerts</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::accept_alert($sid?)</code></td><td>Click OK on alert/confirm/prompt.</td></tr>
+            <tr><td><code>Selenium::dismiss_alert($sid?)</code></td><td>Click Cancel.</td></tr>
+            <tr><td><code>Selenium::alert_text($sid?)</code></td><td>Text of the current alert.</td></tr>
+            <tr><td><code>Selenium::send_alert_text($text, $sid?)</code></td><td>Type into a JS prompt.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Cookies</h3>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::cookies($sid?)</code></td><td>Arrayref of cookie hashes.</td></tr>
+            <tr><td><code>Selenium::get_named_cookie($name, $sid?)</code></td><td>One cookie hash by name, or dies if absent.</td></tr>
+            <tr><td><code>Selenium::add_cookie(%fields)</code></td><td><code>name</code> + <code>value</code> required; <code>path</code>, <code>domain</code>, <code>secure</code>, <code>http_only</code>, <code>same_site</code>, <code>expiry</code> optional.</td></tr>
+            <tr><td><code>Selenium::delete_cookie($name, $sid?)</code></td><td>Delete one cookie.</td></tr>
+            <tr><td><code>Selenium::delete_all_cookies($sid?)</code></td><td>Delete every cookie.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Pure helpers (no browser)</h3>
+        <p>These open no session &mdash; string parsing / validation that runs without a WebDriver server:</p>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>Selenium::parse_locator("css=.btn")</code></td><td>&rarr; <code>{ strategy, value }</code> &mdash; splits <code>strategy=value</code>, canonicalizes the strategy for <code>find</code> (bare value &rarr; css).</td></tr>
+            <tr><td><code>Selenium::build_locator($strategy, $value)</code></td><td>&rarr; <code>{ locator, strategy }</code> &mdash; inverse of <code>parse_locator</code>; rejects unknowns.</td></tr>
+            <tr><td><code>Selenium::valid_locator_strategy($s)</code></td><td>&rarr; <code>{ strategy, valid, canonical }</code>.</td></tr>
+            <tr><td><code>Selenium::locator_to_w3c($strategy, $value?)</code></td><td>&rarr; <code>{ using, value, strategy }</code> &mdash; the W3C WebDriver protocol pair; id/name/class collapse to a <code>css selector</code>.</td></tr>
+            <tr><td><code>Selenium::w3c_to_locator($using, $value)</code></td><td>&rarr; <code>{ strategy, value, locator }</code> &mdash; inverse for the five W3C <code>using</code> strategies.</td></tr>
+            <tr><td><code>Selenium::key_code($key)</code></td><td>&rarr; <code>{ key, code_point, codepoint, char }</code> &mdash; WebDriver special-key PUA code point (<code>Enter</code>&rarr;U+E007, <code>F1</code>&ndash;<code>F12</code>, aliases).</td></tr>
+            <tr><td><code>Selenium::key_name(%opts)</code></td><td>&rarr; <code>{ key, code_point, codepoint, char }</code> &mdash; PUA code point &rarr; canonical key name; inverse of <code>key_code</code>.</td></tr>
+            <tr><td><code>Selenium::parse_cookie("a=b; Path=/; Secure")</code></td><td>&rarr; <code>{ name, value, domain, path, secure, http_only, same_site, expires }</code> &mdash; feeds <code>add_cookie</code>.</td></tr>
+            <tr><td><code>Selenium::build_cookie(%opts)</code></td><td>&rarr; <code>Set-Cookie</code> string &mdash; inverse of <code>parse_cookie</code>; truthy <code>secure</code>/<code>http_only</code> become bare flags.</td></tr>
+            <tr><td><code>Selenium::cookie_domain_matches($cookie_domain, $host)</code></td><td>&rarr; <code>{ cookie_domain, host, matches }</code> &mdash; RFC 6265 &sect;5.1.3 domain matching.</td></tr>
+            <tr><td><code>Selenium::cookie_path_matches($cookie_path, $request_path)</code></td><td>&rarr; <code>{ cookie_path, request_path, matches }</code> &mdash; RFC 6265 &sect;5.1.4 path matching.</td></tr>
+            <tr><td><code>Selenium::css_escape($value)</code></td><td>&rarr; escaped string &mdash; CSSOM serialize-an-identifier (browser <code>CSS.escape</code>).</td></tr>
+            <tr><td><code>Selenium::css_unescape($escaped)</code></td><td>&rarr; decoded string &mdash; inverse of <code>css_escape</code> (CSS Syntax &sect;4.3.7).</td></tr>
+            <tr><td><code>Selenium::css_escape_string($value)</code></td><td>&rarr; quoted string &mdash; escape + double-quote a CSS attribute-selector value (<code>[attr="&hellip;"]</code>).</td></tr>
+            <tr><td><code>Selenium::build_css_selector(%parts)</code></td><td>&rarr; selector string &mdash; compose <code>tag</code>/<code>id</code>/<code>classes</code>/<code>attributes</code> into a CSS selector.</td></tr>
+            <tr><td><code>Selenium::parse_css_selector($selector)</code></td><td>&rarr; <code>{ tag, id, classes:[&hellip;], attributes:{&hellip;} }</code> &mdash; inverse of <code>build_css_selector</code>.</td></tr>
+            <tr><td><code>Selenium::build_xpath(%parts)</code></td><td>&rarr; xpath string &mdash; compose <code>tag</code>/<code>id</code>/<code>classes</code>/<code>attributes</code>/<code>text</code>/<code>contains_text</code> into a <code>//</code> locator.</td></tr>
+            <tr><td><code>Selenium::xpath_literal($value)</code></td><td>&rarr; literal string &mdash; quote an arbitrary string as an XPath 1.0 literal; uses <code>concat()</code> when it contains both <code>'</code> and <code>"</code>.</td></tr>
+          </tbody>
+        </table>
+        <p>The same list, with full per-argument notes, lives in the <a href="https://github.com/MenkeTechnologies/stryke-selenium#0x03-api-reference">README API reference</a>.</p>
       </section>
 
       <section class="tutorial-section" id="webdriver">
@@ -256,9 +402,10 @@ selenium-server standalone --port 4444 &amp;</pre>
 &#9474;   &#9500;&#9472;&#9472; common.rs           # tokio runtime + session + element registries
 &#9474;   &#9500;&#9472;&#9472; driver.rs           # open / quit / navigation / locator parsing
 &#9474;   &#9500;&#9472;&#9472; element.rs          # find / wait_for / click / text / attr / ...
-&#9474;   &#9500;&#9472;&#9472; script.rs           # execute_script with WebElement arg unmarshaling
+&#9474;   &#9500;&#9472;&#9472; script.rs           # execute_script / execute_async_script with WebElement arg unmarshaling
+&#9474;   &#9500;&#9472;&#9472; actions.rs          # action-chain pointer/keyboard sequences (click / double / context / send_keys)
 &#9474;   &#9500;&#9472;&#9472; capture.rs          # page + per-element screenshots
-&#9474;   &#9492;&#9472;&#9472; window.rs           # window rects / handles / frames / cookies
+&#9474;   &#9492;&#9472;&#9472; window.rs           # window rects / handles / new-window / frames / cookies
 &#9500;&#9472;&#9472; lib/Selenium.stk        # stryke wrappers (JSON args &rarr; FFI symbol &rarr; JSON return)
 &#9500;&#9472;&#9472; bin/selenium-test.stk   # installable smoke-test launcher
 &#9500;&#9472;&#9472; examples/               # runnable .stk demos
