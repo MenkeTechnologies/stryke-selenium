@@ -155,6 +155,94 @@ pub fn tag(id: u64) -> Result<String> {
     })
 }
 
+/// The element's `innerHTML` property — the serialized markup of its
+/// children (without the element's own opening/closing tag). Empty string
+/// for a void/empty element.
+pub fn inner_html(id: u64) -> Result<String> {
+    let elem = get_element(id)?;
+    block_on(async move {
+        elem.inner_html()
+            .await
+            .map_err(|e| anyhow!("inner_html failed: {e}"))
+    })
+}
+
+/// The element's `outerHTML` property — its own tag plus all descendant
+/// markup. Useful for snapshotting a subtree.
+pub fn outer_html(id: u64) -> Result<String> {
+    let elem = get_element(id)?;
+    block_on(async move {
+        elem.outer_html()
+            .await
+            .map_err(|e| anyhow!("outer_html failed: {e}"))
+    })
+}
+
+/// The element's live `value` DOM property (form fields). `attr("value")`
+/// returns the original HTML attribute; this returns the current value the
+/// user/JS has set. `None` for elements without a `value` property.
+pub fn value(id: u64) -> Result<Option<String>> {
+    let elem = get_element(id)?;
+    block_on(async move { elem.value().await.map_err(|e| anyhow!("value failed: {e}")) })
+}
+
+/// The element's `class` attribute as a single space-separated string, or
+/// `None` when the element has no `class` attribute.
+pub fn class_name(id: u64) -> Result<Option<String>> {
+    let elem = get_element(id)?;
+    block_on(async move {
+        elem.class_name()
+            .await
+            .map_err(|e| anyhow!("class_name failed: {e}"))
+    })
+}
+
+/// Whether the element is currently both displayed and enabled — the
+/// composite "a real click would land" check selenium exposes as
+/// `is_clickable`.
+pub fn is_clickable(id: u64) -> Result<bool> {
+    let elem = get_element(id)?;
+    block_on(async move {
+        elem.is_clickable()
+            .await
+            .map_err(|e| anyhow!("is_clickable failed: {e}"))
+    })
+}
+
+/// Whether the element handle is still attached to the DOM (not stale).
+/// Returns `false` for a detached element rather than erroring, so a
+/// stryke script can poll a handle across navigations/re-renders.
+pub fn is_present(id: u64) -> Result<bool> {
+    let elem = get_element(id)?;
+    block_on(async move {
+        elem.is_present()
+            .await
+            .map_err(|e| anyhow!("is_present failed: {e}"))
+    })
+}
+
+/// Give the element keyboard focus by calling its DOM `focus()` method —
+/// the non-clicking way to focus an input before `send_keys` when a real
+/// click would trigger interceptors.
+pub fn focus(id: u64) -> Result<()> {
+    let elem = get_element(id)?;
+    block_on(async move { elem.focus().await.map_err(|e| anyhow!("focus failed: {e}")) })
+}
+
+/// The element's parent node (`./..` in XPath) → a freshly registered
+/// element id. Errors if the element is the document root and has no
+/// parent.
+pub fn parent(id: u64) -> Result<u64> {
+    let elem = get_element(id)?;
+    block_on(async move {
+        let p = elem
+            .parent()
+            .await
+            .map_err(|e| anyhow!("parent failed: {e}"))?;
+        register_element(p)
+    })
+}
+
 pub fn rect(id: u64) -> Result<Rect> {
     let elem = get_element(id)?;
     block_on(async move {

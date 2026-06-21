@@ -423,6 +423,63 @@ pub extern "C" fn selenium__element_tag(args: *const c_char) -> *const c_char {
 }
 
 #[no_mangle]
+pub extern "C" fn selenium__element_inner_html(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "html": element::inner_html(arg_element(&v, "element")?)? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__element_outer_html(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "html": element::outer_html(arg_element(&v, "element")?)? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__element_value(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "value": element::value(arg_element(&v, "element")?)? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__element_class_name(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "value": element::class_name(arg_element(&v, "element")?)? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__element_is_clickable(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "value": element::is_clickable(arg_element(&v, "element")?)? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__element_is_present(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "value": element::is_present(arg_element(&v, "element")?)? }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__element_focus(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        element::focus(arg_element(&v, "element")?)?;
+        Ok(json!({}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn selenium__element_parent(args: *const c_char) -> *const c_char {
+    ffi_call(args, |v| {
+        Ok(json!({ "element": element::parent(arg_element(&v, "element")?)? }))
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn selenium__element_rect(args: *const c_char) -> *const c_char {
     ffi_call(args, |v| {
         Ok(serde_json::to_value(element::rect(arg_element(

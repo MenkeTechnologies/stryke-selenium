@@ -305,6 +305,66 @@ fn Selenium::tag ($eid) {
     $o->{tag}
 }
 
+## innerHTML — the markup of the element's children, without its own tag.
+fn Selenium::inner_html ($eid) {
+    val $o = Selenium::_decode("element_inner_html",
+        selenium__element_inner_html(to_json({ element => $eid })))
+    $o->{html}
+}
+
+## outerHTML — the element's own tag plus all descendant markup.
+fn Selenium::outer_html ($eid) {
+    val $o = Selenium::_decode("element_outer_html",
+        selenium__element_outer_html(to_json({ element => $eid })))
+    $o->{html}
+}
+
+## Live `value` DOM property of a form field (or undef). Differs from
+## `attr("value")`, which returns the original HTML attribute.
+fn Selenium::value ($eid) {
+    val $o = Selenium::_decode("element_value",
+        selenium__element_value(to_json({ element => $eid })))
+    $o->{value}
+}
+
+## The `class` attribute as one space-separated string (or undef if absent).
+fn Selenium::class_name ($eid) {
+    val $o = Selenium::_decode("element_class_name",
+        selenium__element_class_name(to_json({ element => $eid })))
+    $o->{value}
+}
+
+## 1/0 — element is both displayed and enabled (a real click would land).
+fn Selenium::is_clickable ($eid) {
+    val $o = Selenium::_decode("element_is_clickable",
+        selenium__element_is_clickable(to_json({ element => $eid })))
+    $o->{value} ? 1 : 0
+}
+
+## 1/0 — element handle is still attached to the DOM (not stale). Returns
+## 0 for a detached element instead of dying, so a handle can be polled
+## across navigations/re-renders.
+fn Selenium::is_present ($eid) {
+    val $o = Selenium::_decode("element_is_present",
+        selenium__element_is_present(to_json({ element => $eid })))
+    $o->{value} ? 1 : 0
+}
+
+## Give the element keyboard focus via its DOM `focus()` method (no click).
+fn Selenium::focus ($eid) {
+    Selenium::_decode("element_focus",
+        selenium__element_focus(to_json({ element => $eid })))
+    1
+}
+
+## The element's parent node → a fresh element id. Dies if there is no
+## parent (the element is the document root).
+fn Selenium::parent ($eid) {
+    val $o = Selenium::_decode("element_parent",
+        selenium__element_parent(to_json({ element => $eid })))
+    $o->{element}
+}
+
 ## Geometry → ($x, $y, $width, $height).
 fn Selenium::rect ($eid) {
     val $o = Selenium::_decode("element_rect",

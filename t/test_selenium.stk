@@ -195,4 +195,21 @@ assert_eq Selenium::xpath_literal(q{'}),      q{"'"},               "xpath_liter
 # Builds a real text locator.
 assert_eq "//button[text()=" . Selenium::xpath_literal(q{it's "go"}) . "]", q{//button[text()=concat('it', "'", 's "go"')]}, "xpath_literal: composes a text() locator"
 
+# ── element ops dispatch + error path (no browser needed) ────────────
+# These ops require a live WebElement, but the FFI path can still be
+# exercised in CI: a bogus element id is rejected by the cdylib's
+# element registry (`get_element`) before any WebDriver call, so each
+# wrapper must `die "Selenium::<op>: no Selenium element #..."`. This
+# pins both that the FFI symbol resolves and that `_decode` surfaces the
+# cdylib error. 999999 is never a registered id in a fresh process.
+val $bogus = 999999
+assert_dies fn { Selenium::inner_html($bogus) },   "inner_html: errors on unknown element id"
+assert_dies fn { Selenium::outer_html($bogus) },   "outer_html: errors on unknown element id"
+assert_dies fn { Selenium::value($bogus) },        "value: errors on unknown element id"
+assert_dies fn { Selenium::class_name($bogus) },   "class_name: errors on unknown element id"
+assert_dies fn { Selenium::is_clickable($bogus) }, "is_clickable: errors on unknown element id"
+assert_dies fn { Selenium::is_present($bogus) },   "is_present: errors on unknown element id"
+assert_dies fn { Selenium::focus($bogus) },        "focus: errors on unknown element id"
+assert_dies fn { Selenium::parent($bogus) },       "parent: errors on unknown element id"
+
 test_run

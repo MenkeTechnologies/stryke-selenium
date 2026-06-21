@@ -189,8 +189,16 @@ by `Selenium::open`. Omit it to use the active session.
 | `Selenium::prop($eid, $name)` | live DOM property |
 | `Selenium::css($eid, $name)` | resolved CSS value |
 | `Selenium::tag($eid)` | lowercase tag name |
+| `Selenium::class_name($eid)` | `class` attribute as one string, or `undef` |
+| `Selenium::value($eid)` | live `value` DOM property (form fields), or `undef` |
+| `Selenium::inner_html($eid)` | `innerHTML` (children markup) |
+| `Selenium::outer_html($eid)` | `outerHTML` (own tag + children) |
+| `Selenium::parent($eid)` | parent node → a fresh element id |
 | `Selenium::rect($eid)` | `($x, $y, $w, $h)` |
 | `Selenium::is_displayed($eid)` / `is_enabled` / `is_selected` | `1` / `0` |
+| `Selenium::is_clickable($eid)` | `1`/`0` — displayed **and** enabled |
+| `Selenium::is_present($eid)` | `1`/`0` — handle still attached (not stale) |
+| `Selenium::focus($eid)` | focus the element via DOM `focus()` (no click) |
 | `Selenium::drop($eid)` | drop the client-side handle |
 
 ### JavaScript
