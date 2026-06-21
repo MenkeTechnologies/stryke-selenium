@@ -278,8 +278,8 @@ These open no session — string parsing/validation that runs without a WebDrive
 | `Selenium::key_name(%opts)` | `→ { key, code_point, codepoint, char }` — PUA code point (`codepoint`/`char`) → canonical key name; inverse of `key_code` |
 | `Selenium::parse_cookie("a=b; Path=/; Secure")` | `→ { name, value, domain, path, secure, http_only, same_site, expires }` — feeds `add_cookie` |
 | `Selenium::build_cookie(%opts)` | `→ Set-Cookie string` — inverse of `parse_cookie`; truthy `secure`/`http_only` become bare flags |
-| `Selenium::cookie_domain_matches($cookie_domain, $host)` | hashref | `{ cookie_domain, host, matches }` — RFC 6265 §5.1.3 domain matching (identical or dot-bounded suffix; IP hosts match only identically) |
-| `Selenium::cookie_path_matches($cookie_path, $request_path)` | hashref | `{ cookie_path, request_path, matches }` — RFC 6265 §5.1.4 path matching (identical, prefix ending in `/`, or prefix at a `/` boundary; case-sensitive) |
+| `Selenium::cookie_domain_matches($cookie_domain, $host)` | `→ { cookie_domain, host, matches }` — RFC 6265 §5.1.3 domain matching (identical or dot-bounded suffix; IP hosts match only identically) |
+| `Selenium::cookie_path_matches($cookie_path, $request_path)` | `→ { cookie_path, request_path, matches }` — RFC 6265 §5.1.4 path matching (identical, prefix ending in `/`, or prefix at a `/` boundary; case-sensitive) |
 | `Selenium::css_escape($value)` | `→ escaped string` — CSSOM serialize-an-identifier (browser `CSS.escape`); embed an arbitrary id/class in a CSS selector |
 | `Selenium::css_unescape($escaped)` | `→ decoded string` — inverse of `css_escape` (CSS Syntax §4.3.7); decodes `\HH ` hex + `\c` escapes back to the raw id/class |
 | `Selenium::css_escape_string($value)` | `→ quoted string` — escape + double-quote a CSS attribute-selector value (`[attr="…"]`); the string-context companion of `css_escape` |
