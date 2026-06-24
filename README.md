@@ -28,6 +28,8 @@ sessions and WebElement handles persist across calls.
 
 ### [`strykelang`](https://github.com/MenkeTechnologies/strykelang) &middot; [`stryke-gui`](https://github.com/MenkeTechnologies/stryke-gui) &middot; [`stryke-aws`](https://github.com/MenkeTechnologies/stryke-aws)
 
+### [`Read the Docs`](https://menketechnologies.github.io/stryke-selenium/) &middot; [`Engineering Report`](https://menketechnologies.github.io/stryke-selenium/report.html)
+
 ---
 
 ## Table of Contents
