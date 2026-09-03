@@ -98,7 +98,7 @@ per-target build step on the user's machine.
 Pin a specific release:
 
 ```sh
-s pkg install -g github.com/MenkeTechnologies/stryke-selenium@v0.17.0
+s pkg install -g github.com/MenkeTechnologies/stryke-selenium@v0.18.7
 ```
 
 You also need a WebDriver server (chromedriver / geckodriver /
