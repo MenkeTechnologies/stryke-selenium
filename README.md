@@ -375,7 +375,7 @@ cd ~/RustroverProjects/stryke-selenium
 cargo build --release            # → target/release/libstryke_selenium.{dylib,so}
 ```
 
-thirtyfour ships with rustls-tls in the default feature set, so there
+thirtyfour is built with the `rustls-tls` feature (default features off), so there
 are no OS-side build dependencies beyond a working Rust toolchain — no
 openssl, no Wayland / X11 stack.
 
